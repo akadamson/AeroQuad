@@ -22,7 +22,12 @@ class  Receiver {
 public:
   int receiverData[LASTCHANNEL];
   int transmitterCommand[LASTCHANNEL];
-  int transmitterCommandSmooth[LASTCHANNEL];
+  
+  // RX smoothing
+  byte rcAveIndex;
+  int rcAveData[LASTCHANNEL][4];
+  int rcSlop[LASTCHANNEL];
+  
   int transmitterZero[3];
   int transmitterTrim[3];
   // Controls the strength of the commands sent from the transmitter
@@ -31,9 +36,9 @@ public:
   float transmitterSmooth[LASTCHANNEL];
   float mTransmitter[LASTCHANNEL];
   float bTransmitter[LASTCHANNEL];
-  //unsigned long currentTime, previousTime;
 
   Receiver(void) {
+    rcAveIndex = 0;
     transmitterCommand[ROLL] = 1500;
     transmitterCommand[PITCH] = 1500;
     transmitterCommand[YAW] = 1500;
@@ -41,8 +46,8 @@ public:
     transmitterCommand[MODE] = 1000;
     transmitterCommand[AUX] = 1000;
 
-    for (byte channel = ROLL; channel < LASTCHANNEL; channel++)
-      transmitterCommandSmooth[channel] = 1.0;
+//    for (byte channel = ROLL; channel < LASTCHANNEL; channel++)
+//      transmitterCommandSmooth[channel] = 1.0;
     for (byte channel = ROLL; channel < THROTTLE; channel++)
       transmitterZero[channel] = 1500;
   }
@@ -51,7 +56,7 @@ public:
   // The following function calls must be defined in any new subclasses
   // ******************************************************************
   virtual void initialize(void);
-  virtual void read(void);
+  virtual uint16_t getReceiverChannel(byte channel){return 0;};
 
   // **************************************************************
   // The following functions are common between all Gyro subclasses
@@ -59,7 +64,7 @@ public:
 
   void _initialize(void) {
     xmitFactor = readFloat(XMITFACTOR_ADR);
-    
+
     mTransmitter[0] = readFloat(RECEIVER_CHANNEL_0_SLOPE_ADR);
     bTransmitter[0] = readFloat(RECEIVER_CHANNEL_0_OFFSET_ADR);
     transmitterSmooth[0] = readFloat(RECEIVER_CHANNEL_0_SMOOTH_FACTOR_ADR);
@@ -78,6 +83,46 @@ public:
     mTransmitter[5] = readFloat(RECEIVER_CHANNEL_5_SLOPE_ADR);
     bTransmitter[5] = readFloat(RECEIVER_CHANNEL_5_OFFSET_ADR);
     transmitterSmooth[5] = readFloat(RECEIVER_CHANNEL_5_SMOOTH_FACTOR_ADR);
+
+    for(byte channel = ROLL; channel < LASTCHANNEL; channel++) {
+     // AKA experiement
+      // initialize the average array incase of no receiver
+      for (byte i = 0; i < 4; i++)
+        rcAveData[channel][i] = MIDCOMMAND;
+    }
+  }
+
+  // Calculate PWM pulse width of receiver data
+  // If invalid PWM measured, use last known good time
+  void read(void) {
+    rcAveIndex++;
+    for(byte channel = ROLL; channel < LASTCHANNEL; channel++) {
+      // Apply transmitter calibration adjustment
+      rcAveData[channel][rcAveIndex % 4] = (mTransmitter[channel] * getReceiverChannel(channel)) + bTransmitter[channel];
+
+      receiverData[channel] = 0;
+      for (byte i = 0; i < 4; i++) {
+        receiverData[channel] += rcAveData[channel][i];
+      }
+      receiverData[channel] = (receiverData[channel] + 2) / 4;
+      
+      // added AKA create deadband version
+      if (receiverData[channel] < rcSlop[channel] - 3)
+        rcSlop[channel] = receiverData[channel] + 2;
+      if (receiverData[channel] > rcSlop[channel] + 3)
+        rcSlop[channel] = receiverData[channel] - 2;
+        
+      // Smooth the flight control transmitter inputs
+      // AKA 2.4 transmitterCommandSmooth[channel] = filterSmooth(receiverData[channel], transmitterCommandSmooth[channel], transmitterSmooth[channel]);
+    }
+
+    // Reduce transmitter commands using xmitFactor and center around 1500
+    for (byte channel = ROLL; channel < THROTTLE; channel++)
+      transmitterCommand[channel] = ((rcSlop[channel] - transmitterZero[channel]) * xmitFactor) + transmitterZero[channel]; // use the hysteresis version
+
+    // No xmitFactor reduction applied for throttle, mode and AUX
+    for (byte channel = THROTTLE; channel < LASTCHANNEL; channel++)
+      transmitterCommand[channel] = rcSlop[channel]; // use the hysteresis version
   }
 
   // returns non-smoothed non-scaled ADC data in PWM full range 1000-2000 values
@@ -85,26 +130,19 @@ public:
     return receiverData[channel];
   }
   
-  // returns raw but smoothed receiver(channel) in PWM
-  const int getRawSmoothed(byte channel) {
-    return transmitterCommandSmooth[channel];
-  }
- 
-   // returns smoothed & scaled receiver(channel) in PWM values, zero centered
+   // returns smoothed & scaled receiver(channel) in PWM values
   const int getData(byte channel) {
     return transmitterCommand[channel];
   }
   
-  // return the smoothed & scaled number of radians/sec in stick movement - zero centered
-  const float getSIData(byte channel) {
-    // 2.3 Original
-    return ((transmitterCommand[channel] - transmitterZero[channel]) * (2.5 * PWM2RAD));  // +/- 2.5RPS 50% of full rate
-    // 2.3 Stable
-    //return ((transmitterCommand[channel] - transmitterZero[channel]) * (5.0 * PWM2RAD));  // +/- 5RPS factored by xmitfactor of full rate
+  // return the stick position - zero centered
+  const int getStickPosition(byte channel) {
+    return (transmitterCommand[channel] - transmitterZero[channel]);
+//    return (transmitterCommand[channel] - transmitterTrim[channel]);
   }
 
-  const int getTrimData(byte channel) {
-    return receiverData[channel] - transmitterTrim[channel];
+  const int getTrimPosition(byte channel) {
+    return (transmitterCommand[channel] - transmitterTrim[channel]);
   }
 
   // returns Zero value of channel in PWM
@@ -156,12 +194,13 @@ public:
     bTransmitter[channel] = value;
   }
 
+/*
   const float getAngle(byte channel) {
     // Scale 1000-2000 usecs to -45 to 45 degrees
     // m = 0.09, b = -135
     return (0.09 * transmitterCommand[channel]) - 135;
     //return (0.09 * receiverData[channel]) - 135;
-  }
+  } */
 };
 
 /*************************************************/
@@ -275,31 +314,15 @@ public:
     }
   }
 
-  // Calculate PWM pulse width of receiver data
-  // If invalid PWM measured, use last known good time
-  void read(void) {
-    for(byte channel = ROLL; channel < LASTCHANNEL; channel++) {
-      byte pin = receiverPin[channel];
-      uint8_t oldSREG = SREG;
-      cli();
-      // Get receiver value read by pin change interrupt handler
-      uint16_t lastGoodWidth = pinData[pin].lastGoodWidth;
-      SREG = oldSREG;
+  uint16_t getReceiverChannel(const byte channel) {
+    byte pin = receiverPin[channel];
+    uint8_t oldSREG = SREG;
+    cli();
+    // Get receiver value read by pin change interrupt handler
+    uint16_t lastGoodWidth = pinData[pin].lastGoodWidth;
+    SREG = oldSREG;
 
-      // Apply transmitter calibration adjustment
-      receiverData[channel] = (mTransmitter[channel] * lastGoodWidth) + bTransmitter[channel];
-      // Smooth the flight control transmitter inputs
-      transmitterCommandSmooth[channel] = filterSmooth(receiverData[channel], transmitterCommandSmooth[channel], transmitterSmooth[channel]);
-    }
-
-    // Reduce transmitter commands using xmitFactor and center around 1500
-    for (byte channel = ROLL; channel < LASTCHANNEL; channel++)
-      if (channel < THROTTLE)
-        transmitterCommand[channel] = ((transmitterCommandSmooth[channel] - transmitterZero[channel]) * xmitFactor) + transmitterZero[channel];
-      else
-    // No xmitFactor reduction applied for throttle, mode and
-    //for (byte channel = THROTTLE; channel < LASTCHANNEL; channel++)
-        transmitterCommand[channel] = transmitterCommandSmooth[channel];
+    return lastGoodWidth;
   }
 };
 #endif
@@ -377,7 +400,12 @@ SIGNAL(PCINT2_vect) {
   static byte receiverPin[6] = {5, 3, 2, 4, 1, 0}; // bit number of PORTK used for ROLL, PITCH, YAW, THROTTLE, MODE, AUX
 #else
  //arduino pins 63, 64, 65, 62, 66, 67
-  static byte receiverPin[6] = {1, 2, 3, 0, 4, 5}; // bit number of PORTK used for ROLL, PITCH, YAW, THROTTLE, MODE, AUX
+  #ifdef AKA_MODS
+    // note AKA flipped 4,5 to swap on TX while doing Position testing
+    static byte receiverPin[6] = {1, 2, 3, 0, 5, 4}; // bit number of PORTK used for ROLL, PITCH, YAW, THROTTLE, MODE, AUX
+  #else
+    static byte receiverPin[6] = {1, 2, 3, 0, 4, 5}; // bit number of PORTK used for ROLL, PITCH, YAW, THROTTLE, MODE, AUX
+  #endif
 #endif
 
 class Receiver_AeroQuadMega : public Receiver {
@@ -393,32 +421,20 @@ public:
       pinData[receiverPin[channel]].edge = FALLING_EDGE;
   }
 
-  // Calculate PWM pulse width of receiver data
-  // If invalid PWM measured, use last known good time
-  void read(void) {
-    for(byte channel = ROLL; channel < LASTCHANNEL; channel++) {
-      byte pin = receiverPin[channel];
-      uint8_t oldSREG = SREG;
-      cli();
-      // Get receiver value read by pin change interrupt handler
-      uint16_t lastGoodWidth = pinData[pin].lastGoodWidth;
-      SREG = oldSREG;
-
-      // Apply transmitter calibration adjustment
-      receiverData[channel] = (mTransmitter[channel] * lastGoodWidth) + bTransmitter[channel];
-      // Smooth the flight control transmitter inputs
-      transmitterCommandSmooth[channel] = filterSmooth(receiverData[channel], transmitterCommandSmooth[channel], transmitterSmooth[channel]);
-    }
-
-    // Reduce transmitter commands using xmitFactor and center around 1500
-    for (byte channel = ROLL; channel < THROTTLE; channel++)
-      transmitterCommand[channel] = ((transmitterCommandSmooth[channel] - transmitterZero[channel]) * xmitFactor) + transmitterZero[channel];
-    // No xmitFactor reduction applied for throttle, mode and AUX
-    for (byte channel = THROTTLE; channel < LASTCHANNEL; channel++)
-      transmitterCommand[channel] = transmitterCommandSmooth[channel];
+  uint16_t getReceiverChannel(const byte channel) {
+  	byte pin = receiverPin[channel];
+  
+  	uint8_t oldSREG = SREG;
+  	cli();
+  	// Get receiver value read by pin change interrupt handler
+  	uint16_t lastGoodWidth = pinData[pin].lastGoodWidth;
+  	SREG = oldSREG;
+  
+  	return lastGoodWidth;
   }
 };
 
+#ifdef AeroQuadMega_CHR6DM
 class Receiver_AeroQuadMega_Fake :
 public Receiver {
 private:
@@ -436,37 +452,11 @@ public:
     PCICR |= 0x1 << 2;
   }
 
-  // Calculate PWM pulse width of receiver data
-  // If invalid PWM measured, use last known good time
-  void read(void) {
-    uint16_t data[6];
-    uint8_t oldSREG;
-
-    oldSREG = SREG;
-    cli();
-    // Buffer receiver values read from pin change interrupt handler
-    for (byte channel = ROLL; channel < LASTCHANNEL; channel++)
-      data[channel] = 1500;
-    SREG = oldSREG;
-
-    for(byte channel = ROLL; channel < LASTCHANNEL; channel++) {
-      //currentTime = micros();
-      // Apply transmitter calibration adjustment
-      receiverData[channel] = (mTransmitter[channel] * data[channel]) + bTransmitter[channel];
-      // Smooth the flight control transmitter inputs
-      transmitterCommandSmooth[channel] = filterSmooth(receiverData[channel], transmitterCommandSmooth[channel], transmitterSmooth[channel]);
-      //transmitterCommandSmooth[channel] = transmitterFilter[channel].filter(receiverData[channel]);
-      //previousTime = currentTime;
-    }
-
-    // Reduce transmitter commands using xmitFactor and center around 1500
-    for (byte channel = ROLL; channel < THROTTLE; channel++)
-      transmitterCommand[channel] = ((transmitterCommandSmooth[channel] - transmitterZero[channel]) * xmitFactor) + transmitterZero[channel];
-    // No xmitFactor reduction applied for throttle, mode and AUX
-    for (byte channel = THROTTLE; channel < LASTCHANNEL; channel++)
-      transmitterCommand[channel] = transmitterCommandSmooth[channel];
+  uint16_t getReceiverChannel(const byte channel) {
+    return 1500;
   }
 };
+#endif
 #endif
 
 /*********************************************/
@@ -550,22 +540,15 @@ public:
     sei();
   }
 
-  void read(void) {
-    for(byte channel = ROLL; channel < LASTCHANNEL; channel++) {
-      //currentTime = micros();
-      // Apply transmitter calibration adjustment
-      receiverData[channel] = (mTransmitter[channel] * ((PWM_RAW[receiverPin[channel]]+600)/2)) + bTransmitter[channel];
-      // Smooth the flight control transmitter inputs
-      transmitterCommandSmooth[channel] = filterSmooth(receiverData[channel], transmitterCommandSmooth[channel], transmitterSmooth[channel]);
-      //previousTime = currentTime;
-    }
+  uint16_t getReceiverChannel(const byte channel) {
+  	byte pin = receiverPin[channel];
+  
+	  uint8_t oldSREG = SREG;
+	  cli();
+	  uint16_t lastGoodWidth = PWM_RAW[pin];
+	  SREG = oldSREG;
 
-    // Reduce transmitter commands using xmitFactor and center around 1500
-    for (byte channel = ROLL; channel < THROTTLE; channel++)
-      transmitterCommand[channel] = ((transmitterCommandSmooth[channel] - transmitterZero[channel]) * xmitFactor) + transmitterZero[channel];
-    // No xmitFactor reduction applied for throttle, mode and
-    for (byte channel = THROTTLE; channel < LASTCHANNEL; channel++)
-      transmitterCommand[channel] = transmitterCommandSmooth[channel];
+	  return (lastGoodWidth+600)/2;
   }
 };
 #endif

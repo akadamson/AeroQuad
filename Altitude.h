@@ -50,7 +50,7 @@ public:
     return altitude - groundAltitude;
   }
   
-  const float getRawData(void) {
+  const float getRaw(void) {
     return rawAltitude;
   }
   
@@ -100,40 +100,52 @@ private:
   int b1, b2, mb, mc, md;
   long pressure;
   long temperature;
-  int altitudeAddress;
+  // HJI int altitudeAddress;
   long rawPressure, rawTemperature;
   byte select, pressureCount;
   float pressureFactor;
+  #define ALTITUDE_ADDRESS 0xEE
   
   void requestRawPressure(void) {
-    updateRegisterI2C(altitudeAddress, 0xF4, 0x34+(overSamplingSetting<<6));
+    twiMaster.start(ALTITUDE_ADDRESS | I2C_WRITE);
+    twiMaster.write(0xF4);
+    twiMaster.write(0x34 + (overSamplingSetting<<6));
+    twiMaster.stop();
   }
   
   long readRawPressure(void) {
     unsigned char msb, lsb, xlsb;
-    sendByteI2C(altitudeAddress, 0xF6);
-    Wire.requestFrom(altitudeAddress, 3); // request three bytes
-    while(!Wire.available()); // wait until data available
-    msb = Wire.receive();
-    while(!Wire.available()); // wait until data available
-    lsb = Wire.receive();
-    while(!Wire.available()); // wait until data available
-    xlsb = Wire.receive();
+    twiMaster.start(ALTITUDE_ADDRESS | I2C_WRITE);
+    twiMaster.write(0xF6);
+    twiMaster.start(ALTITUDE_ADDRESS | I2C_READ);
+    msb = twiMaster.read(0);
+    lsb = twiMaster.read(0);
+    xlsb = twiMaster.read(1);
+    twiMaster.stop();
     return (((long)msb<<16) | ((long)lsb<<8) | ((long)xlsb)) >>(8-overSamplingSetting);
   }
 
   void requestRawTemperature(void) {
-    updateRegisterI2C(altitudeAddress, 0xF4, 0x2E);
+    //updateRegisterI2C(altitudeAddress, 0xF4, 0x2E);
+    twiMaster.start(ALTITUDE_ADDRESS | I2C_WRITE);
+    twiMaster.write(0xF4);
+    twiMaster.write(0x2E);
+    twiMaster.stop();
   }
   
-  unsigned int readRawTemperature(void) {
-    sendByteI2C(altitudeAddress, 0xF6);
-    return readWordWaitI2C(altitudeAddress);
+  unsigned int readRegister(byte r) {
+    unsigned char msb, lsb;
+    twiMaster.start(ALTITUDE_ADDRESS | I2C_WRITE);
+    twiMaster.write(r);
+    twiMaster.start(ALTITUDE_ADDRESS | I2C_READ);
+    msb = twiMaster.read(0);
+    lsb = twiMaster.read(1);
+    twiMaster.stop();
+    return(((int)msb<<8) | ((int)lsb));
   }
 
 public: 
   Altitude_AeroQuad_v2() : Altitude(){
-    altitudeAddress = 0x77;
     // oversampling setting
     // 0 = ultra low power
     // 1 = standard
@@ -152,30 +164,18 @@ public:
   // Define all the virtual functions declared in the main class
   // ***********************************************************
   void initialize(void) {
-//    float verifyGroundAltitude;
-    
-    sendByteI2C(altitudeAddress, 0xAA);
-    ac1 = readWordWaitI2C(altitudeAddress);
-    sendByteI2C(altitudeAddress, 0xAC);
-    ac2 = readWordWaitI2C(altitudeAddress);
-    sendByteI2C(altitudeAddress, 0xAE);
-    ac3 = readWordWaitI2C(altitudeAddress);
-    sendByteI2C(altitudeAddress, 0xB0);
-    ac4 = readWordWaitI2C(altitudeAddress);
-    sendByteI2C(altitudeAddress, 0xB2);
-    ac5 = readWordWaitI2C(altitudeAddress);
-    sendByteI2C(altitudeAddress, 0xB4);
-    ac6 = readWordWaitI2C(altitudeAddress);
-    sendByteI2C(altitudeAddress, 0xB6);
-    b1 = readWordWaitI2C(altitudeAddress);
-    sendByteI2C(altitudeAddress, 0xB8);
-    b2 = readWordWaitI2C(altitudeAddress);
-    sendByteI2C(altitudeAddress, 0xBA);
-    mb = readWordWaitI2C(altitudeAddress);
-    sendByteI2C(altitudeAddress, 0xBC);
-    mc = readWordWaitI2C(altitudeAddress);
-    sendByteI2C(altitudeAddress, 0xBE);
-    md = readWordWaitI2C(altitudeAddress);
+    ac1 = readRegister(0xAA);
+    ac2 = readRegister(0xAC);
+    ac3 = readRegister(0xAE);
+    ac4 = readRegister(0xB0);
+    ac5 = readRegister(0xB2);
+    ac6 = readRegister(0xB4);
+    b1 = readRegister(0xB6);
+    b2 = readRegister(0xB8);
+    mb = readRegister(0xBA);
+    mc = readRegister(0xBC);
+    md = readRegister(0xBE);
+
     requestRawTemperature(); // setup up next measure() for temperature
     select = TEMPERATURE;
     pressureCount = 0;
@@ -185,7 +185,7 @@ public:
     delay(26); // delay for pressure
     measureGround();
     // check if measured ground altitude is valid
-    while (abs(getRawData() - getGroundAltitude()) > 10) {
+    while (abs(getRaw() - getGroundAltitude()) > 10) {
       delay(26);
       measureGround();
     }
@@ -211,7 +211,7 @@ public:
       pressureCount++;
     }
     else { // select must equal TEMPERATURE
-      rawTemperature = (long)readRawTemperature();
+      rawTemperature = (long)readRegister(0xF6);
       requestRawPressure();
       select = PRESSURE;
     }

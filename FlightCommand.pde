@@ -21,8 +21,13 @@
 // FlightCommand.pde is responsible for decoding transmitter stick combinations
 // for setting up AeroQuad modes such as motor arming and disarming
 
+// AKA add for testing
+//bool altSwitchState = false;
+
 void readPilotCommands() {
+  // read Receiver
   receiver.read();
+  
   // Read quad configuration commands from transmitter when throttle down
   if (receiver.getRaw(THROTTLE) < MINCHECK) {
     zeroIntegralError();
@@ -31,18 +36,20 @@ void readPilotCommands() {
     // Disarm motors (left stick lower left corner)
     if (receiver.getRaw(YAW) < MINCHECK && armed == ON) {
       armed = OFF;
+      #ifdef HasGPS
+        gps.holdPosition.valid = false;
+      #endif
       motors.commandAllMotors(MINCOMMAND);
       #if defined(APM_OP_CHR6DM) || defined(ArduCopter) 
-      digitalWrite(LED_Red, LOW);
+        digitalWrite(LED_Red, LOW);
       #endif
     }    
     // Zero Gyro and Accel sensors (left stick lower left, right stick lower right corner)
     if ((receiver.getRaw(YAW) < MINCHECK) && (receiver.getRaw(ROLL) > MAXCHECK) && (receiver.getRaw(PITCH) < MINCHECK)) {
       gyro.calibrate(); // defined in Gyro.h
-      accel.calibrate(); // defined in Accel.h
       //accel.setOneG(accel.getFlightData(ZAXIS));
       #if defined(AeroQuadMega_CHR6DM) || defined(APM_OP_CHR6DM)
-        flightAngle->calibrate();
+        flightAngle.calibrate();
       #endif
       zeroIntegralError();
       motors.pulseMotors(3);
@@ -54,6 +61,7 @@ void readPilotCommands() {
         zero_ArduCopter_ADC();
       #endif
     }   
+    
     // Arm motors (left stick lower right corner)
     if (receiver.getRaw(YAW) > MAXCHECK && armed == OFF && safetyCheck == ON) {
       zeroIntegralError();
@@ -63,51 +71,77 @@ void readPilotCommands() {
       #endif
       for (byte motor = FRONT; motor < LASTMOTOR; motor++)
         motors.setMinCommand(motor, MINTHROTTLE);
-      //   delay(100);
-      //altitude.measureGround();
     }
     // Prevents accidental arming of motor output if no transmitter command received
-    if (receiver.getRaw(YAW) > MINCHECK) safetyCheck = ON; 
+    if (receiver.getRaw(YAW) > MINCHECK)
+      safetyCheck = ON; 
   }
-  
-  // Get center value of roll/pitch/yaw channels when enough throttle to lift off
-  if (receiver.getRaw(THROTTLE) < 1300) {
-    receiver.setTransmitterTrim(ROLL, receiver.getRaw(ROLL));
-    receiver.setTransmitterTrim(PITCH, receiver.getRaw(PITCH));
-    receiver.setTransmitterTrim(YAW, receiver.getRaw(YAW));
-    //receiver.setZero(ROLL, receiver.getRaw(ROLL));
-    //receiver.setZero(PITCH, receiver.getRaw(PITCH));
-    //receiver.setZero(YAW, receiver.getRaw(YAW));
-  }
-  
+
   #ifdef RateModeOnly
-    flightMode = ACRO;
+    flightMode = RATE;
   #else
-    // Check Mode switch for Acro or Stable
-    if (receiver.getRaw(MODE) > 1500) {
-      if (flightMode == ACRO) {
+    // Check Mode switch for Rate, Attitude or Position
+    // if greater than 1300 it's ATTITUDE
+    if (receiver.getRaw(MODE) > 1250 && receiver.getRaw(MODE) < 1600) {
+      #ifdef UseLED_Library
+        modeLED.setOn();
+      #else
+        #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2)
+          digitalWrite(LED2PIN, HIGH);
+        #endif
+      #endif
+      if (flightMode == RATE) {
+        zeroIntegralError();
+      }
+      flightMode = ATTITUDE;
+    }
+    // if greater than 1750, it's Position
+    else if (receiver.getRaw(MODE) > 1750) {
+      #ifdef UseLED_Library
+        modeLED.resume();
+      #else
         #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2) || defined(AeroQuadMega_Wii)
           digitalWrite(LED2PIN, HIGH);
         #endif
+      #endif
+      if (flightMode == RATE) {
         zeroIntegralError();
       }
-      flightMode = STABLE;
-   }
-    else {
-      #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2)
-        if (flightMode == STABLE)
-          digitalWrite(LED2PIN, LOW);
+      #ifdef HasGPS
+        // latch beginning lat/lon for position hold
+        // AKA need to put some error checking around this.. in the case where
+        // you don't have a good gps FIX, it shouldn't capture or set the valid flag
+        // then you need some way to denote this in an LED report or some such
+        gps.capturePosition(&gps.holdPosition);
+//        gps.holdPosition = wayPoints[wayPointIndex];
+        flightMode = POSITION;
+      #else
+        flightMode = ATTITUDE;
       #endif
-      flightMode = ACRO;
+    }
+    // else it's RATE
+    else {
+        if (flightMode != RATE)
+          #ifdef UseLED_Library
+            modeLED.setOff();
+	  #else
+	    #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2)
+              digitalWrite(LED2PIN, LOW);
+	    #endif
+          #endif
+          flightMode = RATE;
+          #ifdef HasGPS
+            gps.holdPosition.valid = false;
+          #endif
     }
   #endif
   
    #if defined(APM_OP_CHR6DM) || defined(ArduCopter) 
-      if (flightMode == ACRO) {
+      if (flightMode == RATE) {
         digitalWrite(LED_Yellow, HIGH);
         digitalWrite(LED_Green, LOW);
        }
-     else if (flightMode == STABLE) {
+     else if (flightMode == POSITION) {
         digitalWrite(LED_Green, HIGH);
         digitalWrite(LED_Yellow, LOW); 
      }
@@ -125,12 +159,23 @@ void readPilotCommands() {
          storeAltitude = OFF;
        }
        altitudeHold = ON;
+//       altSwitchState = true;
      }
      // note, Panic will stay set until Althold is toggled off/on
    } 
    else {
      storeAltitude = ON;
      altitudeHold = OFF;
+/*     if (altSwitchState == true) {
+       altSwitchState = false;
+       wayPointIndex = 0;
+       timerCounter = 0;
+       // Get/set trim center value of roll/pitch/yaw channels
+       receiver.setTransmitterTrim(ROLL, receiver.getData(ROLL));
+       receiver.setTransmitterTrim(PITCH, receiver.getData(PITCH));
+       receiver.setTransmitterTrim(YAW, receiver.getData(YAW));
+     }
+     */
    }
   #endif
 }

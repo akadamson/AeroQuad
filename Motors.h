@@ -62,8 +62,8 @@ public:
   };
 
   // The following function calls must be defined in any new subclasses
-  virtual void initialize(void);
-  virtual void write (void);
+//  virtual void initialize(void);
+//  virtual void write (void);
   virtual void commandAllMotors(int motorCommand);
 
   //Any number of optional methods can be configured as needed by the SubSystem to expose functionality externally
@@ -211,7 +211,12 @@ private:
     LEFT          6  PH3             11  PB3                      8  PH5
 */
 
-#define PWM_FREQUENCY 300   // in Hz
+#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+  #define PWM_FREQUENCY 300   // in Hz
+#else
+  #define PWM_FREQUENCY 244   // Match 8 Bit timers PWM frequency of 244 Hz
+#endif
+
 #define PWM_PRESCALER 8
 #define PWM_COUNTER_PERIOD (F_CPU/PWM_PRESCALER/PWM_FREQUENCY)
 
@@ -241,7 +246,7 @@ public:
     // Init PWM Timer 3                                       // WGMn1 WGMn2 WGMn3  = Mode 14 Fast PWM, TOP = ICRn ,Update of OCRnx at BOTTOM
     TCCR3A = (1<<WGM31)|(1<<COM3A1)|(1<<COM3B1)|(1<<COM3C1);  // Clear OCnA/OCnB/OCnC on compare match, set OCnA/OCnB/OCnC at BOTTOM (non-inverting mode)
     TCCR3B = (1<<WGM33)|(1<<WGM32)|(1<<CS31);                 // Prescaler set to 8, that gives us a resolution of 0.5us
-    ICR3 = PWM_COUNTER_PERIOD;                               // Clock_speed / ( Prescaler * desired_PWM_Frequency) #defined above.
+    ICR3 = PWM_COUNTER_PERIOD;                                // Clock_speed / ( Prescaler * desired_PWM_Frequency) #defined above.
   #if defined(plusConfig) || defined(XConfig)
     // Init PWM Timer 4
     TCCR4A = (1<<WGM41)|(1<<COM4A1);
@@ -279,10 +284,10 @@ public:
 //#endif
 //#if defined (__AVR_ATmega328P__)
 #else
-    OCR2B = motorCommand[FRONT] / 16 ;                       // 1000-2000 to 128-256
-    OCR1A = motorCommand[REAR]  * 2 ;
-    OCR1B = motorCommand[RIGHT] * 2 ;
-    OCR2A = motorCommand[LEFT]  / 16 ;
+    OCR2B =  motorCommand[FRONT] / 16 ;                       // 1000-2000 to 128-256
+    OCR1A = (motorCommand[REAR]  / 16) * 32 ;
+    OCR1B = (motorCommand[RIGHT] / 16) * 32 ;
+    OCR2A =  motorCommand[LEFT]  / 16 ;
 #endif
   }
 
@@ -299,10 +304,10 @@ public:
 //#endif
 //#if defined (__AVR_ATmega328P__)
 #else
-    OCR2B = _motorCommand / 16 ;
-    OCR1A = _motorCommand * 2 ;
-    OCR1B = _motorCommand * 2 ;
-    OCR2A = _motorCommand / 16 ;
+    OCR2B =  _motorCommand / 16 ;
+    OCR1A = (_motorCommand / 16) * 32 ;
+    OCR1B = (_motorCommand / 16) * 32 ;
+    OCR2A =  _motorCommand / 16 ;
 #endif
   }
 };
@@ -461,12 +466,12 @@ public:
 // http://code.google.com/p/aeroquad/issues/detail?id=67
 class Motors_AeroQuadI2C : public Motors {
 private:
-  #define MOTORBASE 0x28            // I2C controller base address
+  #define MOTORBASE 0x50            // I2C controller base address
 
-  #define FRONTMOTORID MOTORBASE + 1  // define I2C controller addresses per your configuration
-  #define REARMOTORID  MOTORBASE + 3  // these addresses are for Phifun controllers
-  #define RIGHTMOTORID MOTORBASE + 2  // as installed on jihlein's homebrew AeroQuad 3.0
-  #define LEFTMOTORID  MOTORBASE + 4  // inspired frame
+  #define FRONTMOTORID MOTORBASE + 2  // define I2C controller addresses per your configuration
+  #define REARMOTORID  MOTORBASE + 6  // these addresses are for Phifun controllers
+  #define RIGHTMOTORID MOTORBASE + 4  // as installed on jihlein's homebrew AeroQuad 3.0
+  #define LEFTMOTORID  MOTORBASE + 8  // inspired frame
 
   public:
   Motors_AeroQuadI2C() : Motors(){
@@ -480,26 +485,41 @@ private:
 
   void initialize(void)
   {
-    sendByteI2C(FRONTMOTORID, 0);
-    sendByteI2C(REARMOTORID,  0);
-    sendByteI2C(RIGHTMOTORID, 0);
-    sendByteI2C(LEFTMOTORID,  0);
+    twiMaster.start(FRONTMOTORID | I2C_WRITE);
+    twiMaster.write(0x00);
+    twiMaster.start(REARMOTORID | I2C_WRITE);
+    twiMaster.write(0x00);
+    twiMaster.start(RIGHTMOTORID | I2C_WRITE);
+    twiMaster.write(0x00);
+    twiMaster.start(LEFTMOTORID | I2C_WRITE);
+    twiMaster.write(0x00);
+    twiMaster.stop();
   }
 
   void write(void)
   {
-    sendByteI2C(FRONTMOTORID, constrain((motorCommand[FRONT] * mMotorCommand) + bMotorCommand, 0, 255));
-    sendByteI2C(REARMOTORID,  constrain((motorCommand[REAR]  * mMotorCommand) + bMotorCommand, 0, 255));
-    sendByteI2C(RIGHTMOTORID, constrain((motorCommand[RIGHT] * mMotorCommand) + bMotorCommand, 0, 255));
-    sendByteI2C(LEFTMOTORID,  constrain((motorCommand[LEFT]  * mMotorCommand) + bMotorCommand, 0, 255));
+    twiMaster.start(FRONTMOTORID | I2C_WRITE);
+    twiMaster.write(constrain((motorCommand[FRONT] * mMotorCommand) + bMotorCommand, 0, 255));
+    twiMaster.start(REARMOTORID | I2C_WRITE);
+    twiMaster.write(constrain((motorCommand[REAR]  * mMotorCommand) + bMotorCommand, 0, 255));
+    twiMaster.start(RIGHTMOTORID | I2C_WRITE);
+    twiMaster.write(constrain((motorCommand[RIGHT] * mMotorCommand) + bMotorCommand, 0, 255));
+    twiMaster.start(LEFTMOTORID | I2C_WRITE);
+    twiMaster.write(constrain((motorCommand[LEFT]  * mMotorCommand) + bMotorCommand, 0, 255));
+    twiMaster.stop();
   }
 
   void commandAllMotors(int motorCommand)
   {
-    sendByteI2C(FRONTMOTORID, constrain((motorCommand * mMotorCommand) + bMotorCommand, 0, 255));
-    sendByteI2C(REARMOTORID,  constrain((motorCommand * mMotorCommand) + bMotorCommand, 0, 255));
-    sendByteI2C(RIGHTMOTORID, constrain((motorCommand * mMotorCommand) + bMotorCommand, 0, 255));
-    sendByteI2C(LEFTMOTORID,  constrain((motorCommand * mMotorCommand) + bMotorCommand, 0, 255));
+    twiMaster.start(FRONTMOTORID | I2C_WRITE);
+    twiMaster.write(constrain((motorCommand * mMotorCommand) + bMotorCommand, 0, 255));
+    twiMaster.start(REARMOTORID | I2C_WRITE);
+    twiMaster.write(constrain((motorCommand * mMotorCommand) + bMotorCommand, 0, 255));
+    twiMaster.start(RIGHTMOTORID | I2C_WRITE);
+    twiMaster.write(constrain((motorCommand * mMotorCommand) + bMotorCommand, 0, 255));
+    twiMaster.start(LEFTMOTORID | I2C_WRITE);
+    twiMaster.write(constrain((motorCommand * mMotorCommand) + bMotorCommand, 0, 255));
+    twiMaster.stop();
   }
 };
 

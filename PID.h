@@ -21,17 +21,22 @@
 // Modified from http://www.arduino.cc/playground/Main/BarebonesPIDForEspresso
 float updatePID(float targetPosition, float currentPosition, struct PIDdata *PIDparameters) {
   float error;
+  float pTerm;
   float dTerm;
+  float iTerm;
+  float pidOut;
+  
   // AKA PID experiments
   float deltaPIDTime = (currentTime - PIDparameters->previousPIDTime) / 1000000.0;
 
   PIDparameters->previousPIDTime = currentTime;  // AKA PID experiments
+  
   error = targetPosition - currentPosition;
 
 // AKA PID experiments
 // special case of +/- PI
 /*
-  if (PIDparameters->typePID == TYPEPI) {
+  if (PIDparameters->pidID == HEADING) {
     if (error >= PI) error -= (2*PI);
     if (error < -PI) error += (2*PI);
   }
@@ -45,11 +50,14 @@ float updatePID(float targetPosition, float currentPosition, struct PIDdata *PID
   PIDparameters->integratedError += error * deltaPIDTime;
   PIDparameters->integratedError = constrain(PIDparameters->integratedError, -PIDparameters->windupGuard, PIDparameters->windupGuard);
   
+  pTerm = PIDparameters->P * error;
+  iTerm = PIDparameters->I * PIDparameters->integratedError;
   dTerm = PIDparameters->D * (currentPosition - PIDparameters->lastPosition) / (deltaPIDTime * 100); // dT fix from Honk
+  pidOut = pTerm + iTerm + dTerm;
 
   PIDparameters->lastPosition = currentPosition;
   
-  return (PIDparameters->P * error) + (PIDparameters->I * (PIDparameters->integratedError)) + dTerm;
+  return pidOut;
 }
 
 void zeroIntegralError() __attribute__ ((noinline));

@@ -20,79 +20,53 @@
 
 class Gyro {
 public:
-  float gyroFullScaleOutput;
+//  float gyroFullScaleOutput;
   float gyroScaleFactor;
   float smoothFactor;
   int gyroChannel[3];
   float gyroData[3];
+  #ifdef Loop_200HZ
+    int gyroRAW[3][2];
+    byte index;
+  #endif
   #if defined(AeroQuadMega_CHR6DM) || defined(APM_OP_CHR6DM)
     float gyroZero[3];
   #else
     int gyroZero[3];
   #endif
   int gyroADC[3];
-  byte rollChannel, pitchChannel, yawChannel;
+//  byte rollChannel, pitchChannel, yawChannel;
 //  int sign[3];
-  float rawHeading, gyroHeading;
-  long int previousGyroTime;
-  //unsigned long currentTime, previousTime; // AKA - Changed to remove HONKS time smoothing
+  float gyroHeading;
+  long previousGyroTime;
 
-  Gyro(void){
-//    sign[ROLL] = 1;
-//    sign[PITCH] = 1;
-//    sign[YAW] = 1;
+  Gyro(void) {
   }
-  
-  // The following function calls must be defined in any new subclasses
-  virtual void initialize(void);
-//  virtual void initialize(byte rollChannel, byte pitchChannel, byte yawChannel) {
-//    this->_initialize(rollChannel, pitchChannel, yawChannel);
-//  }
-  virtual void measure(void);
-  virtual void calibrate(void);
-  virtual void autoZero(void);
-  virtual const int getFlightData(byte);
 
-  // The following functions are common between all Gyro subclasses
-  void _initialize(byte rollChannel, byte pitchChannel, byte yawChannel) {
-    gyroChannel[ROLL] = rollChannel;
-    gyroChannel[PITCH] = pitchChannel;
-    gyroChannel[ZAXIS] = yawChannel;
-    
+  void _initialize(void) {  
     gyroZero[ROLL] = readFloat(GYRO_ROLL_ZERO_ADR);
     gyroZero[PITCH] = readFloat(GYRO_PITCH_ZERO_ADR);
-    gyroZero[ZAXIS] = readFloat(GYRO_YAW_ZERO_ADR);
+    gyroZero[YAW] = readFloat(GYRO_YAW_ZERO_ADR);
     smoothFactor = readFloat(GYROSMOOTH_ADR);
-  }
 
-  // returns the raw ADC value from the gyro, with sign change if needed, not smoothed or scaled to SI units    
+    #ifdef Loop_200HZ
+      index = 1; // AKA index value for flip/flop store of 2 sample average
+      // init flip/flop array to zero
+      for (byte axis = ROLL; axis < LASTAXIS; axis++) {
+        gyroRAW[axis][0] = 0;
+        gyroRAW[axis][1] = 0;
+      }
+    #endif
+  }
+  
+  // returns the raw ADC value from the gyro 
   const int getRaw(byte axis) {
-    return gyroADC[axis]; // * sign[axis];
+    return gyroADC[axis];
   }
   
-  // returns the smoothed and scaled to SI units value of the Gyro with sign change if needed
-  // centered on zero radians +/-
+  // returns the smoothed and scaled to SI units value of the Gyro
   const float getData(byte axis) {
-    return gyroData[axis]; // * sign[axis];
-  }
-  
-  //  inverts, if needed the sign on the specific axis
-//  const int invert(byte axis) {
-//    sign[axis] = -sign[axis];
-//    return sign[axis];
-//  }
-  
-  const int getZero(byte axis) {
-    return gyroZero[axis];
-  }
-  
-  void setZero(byte axis, int value) {
-    gyroZero[axis] = value;
-  }    
-  
-  // returns the scale factor used for SI units on the gyro
-  const float getScaleFactor() {
-    return gyroScaleFactor;
+    return gyroData[axis];
   }
 
   // returns the smooth factor used on the gyro
@@ -106,13 +80,6 @@ public:
 
   // returns gyro based heading as +/- PI in radians
   const float getHeading(void) {
-    //div_t integerDivide;
-    
-    //integerDivide = div(rawHeading, 2*PI);
-    gyroHeading = rawHeading; // + (integerDivide.quot * -(2*PI));
-    if (gyroHeading > PI) gyroHeading -= (2*PI);
-    if (gyroHeading < -PI) gyroHeading += (2*PI);
-    //Serial.print(integerDivide.quot);Serial.print(",");Serial.print(integerDivide.rem);Serial.println();
     return gyroHeading;
   }
 };
@@ -124,9 +91,15 @@ public:
 class Gyro_AeroQuad_v1 : public Gyro {
 public:
   Gyro_AeroQuad_v1() : Gyro() {
+    gyroScaleFactor = radians((aref/1024.0) / 0.002);  // IDG/IXZ500 sensitivity = 2mV/(deg/sec)
+    previousGyroTime = micros();
   }
   
+/******************************************************/
+
   void initialize(void) {
+  
+    this->_initialize();
     analogReference(EXTERNAL);
     // Configure gyro auto zero pins
     pinMode (AZPIN, OUTPUT);
@@ -136,11 +109,13 @@ public:
     // rollChannel = 4
     // pitchChannel = 3
     // yawChannel = 5
-    this->_initialize(4,3,5);
-    gyroFullScaleOutput = 500.0;   // IDG/IXZ500 full scale output = +/- 500 deg/sec
-    gyroScaleFactor = radians((aref/1024.0) / 0.002);  // IDG/IXZ500 sensitivity = 2mV/(deg/sec)
+    gyroChannel[ROLL] = 4;
+    gyroChannel[PITCH] = 3;
+    gyroChannel[YAW]  = 5;
   }
   
+/******************************************************/
+
   void measure(void) {
     for (byte axis = ROLL; axis < LASTAXIS; axis++) {
       if (axis == PITCH)
@@ -149,19 +124,27 @@ public:
         gyroADC[axis] = gyroZero[axis] - analogRead(gyroChannel[axis]);
       gyroData[axis] = filterSmooth(gyroADC[axis] * gyroScaleFactor, gyroData[axis], smoothFactor);
     }
+    
+    //  Calculate gyro based heading
+    long currentGyroTime = micros();
+    if (gyroData[YAW] > radians(1.0) || gyroData[YAW] < radians(-1.0))
+      gyroHeading += gyroData[YAW] * ((currentGyroTime - previousGyroTime) / 1000000.0);
+      previousGyroTime = currentGyroTime;
+    if (gyroHeading > PI)  gyroHeading -= (2*PI);
+    if (gyroHeading < -PI) gyroHeading += (2*PI);
   }
 
-  const int getFlightData(byte axis) {
-    return getRaw(axis);
-  }
-  
- void calibrate() {
+/******************************************************/
+
+  void calibrate() {
     autoZero();
-    writeFloat(gyroZero[ROLL], GYRO_ROLL_ZERO_ADR);
+    writeFloat(gyroZero[ROLL],  GYRO_ROLL_ZERO_ADR);
     writeFloat(gyroZero[PITCH], GYRO_PITCH_ZERO_ADR);
-    writeFloat(gyroZero[YAW], GYRO_YAW_ZERO_ADR);
+    writeFloat(gyroZero[YAW],   GYRO_YAW_ZERO_ADR);
   }
   
+/******************************************************/
+
   void autoZero() {
     int findZero[FINDZERO];
     digitalWrite(AZPIN, HIGH);
@@ -182,104 +165,117 @@ public:
 /****************** AeroQuad_v2 Gyro ******************/
 /******************************************************/
 #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2) || defined(AeroQuad_Mini)
-/*
-  10kOhm pull-ups on I2C lines.
-  VDD & VIO = 3.3V
-  SDA -> A4 (PC4)
-  SCL -> A5 (PC5)
-  INT -> D2 (PB2) (or no connection, not used here)
-  CLK -> GND
-*/
 class Gyro_AeroQuadMega_v2 : public Gyro {
 private:
-  int gyroAddress;
-  //float gyroLastData;
   
 public:
   Gyro_AeroQuadMega_v2() : Gyro() {
-#ifdef AeroQuad_Mini
-    gyroAddress = 0x68;
-#else        
-    gyroAddress = 0x69;
-#endif    
-    gyroFullScaleOutput = 2000.0;   // ITG3200 full scale output = +/- 2000 deg/sec
+  #ifdef AeroQuad_Mini
+    #define GYRO_ADDRESS 0xD0
+  #else        
+    #define GYRO_ADDRESS 0xD2
+  #endif    
     gyroScaleFactor = radians(1.0 / 14.375);  //  ITG3200 14.375 LSBs per °/sec
-    
     previousGyroTime = micros();
   }
   
+/******************************************************/
+
   void initialize(void) {
-//    this->_initialize(0,1,2);
-    gyroZero[XAXIS] = readFloat(GYRO_ROLL_ZERO_ADR);
-    gyroZero[YAXIS] = readFloat(GYRO_PITCH_ZERO_ADR);
-    gyroZero[ZAXIS] = readFloat(GYRO_YAW_ZERO_ADR);
-    smoothFactor = readFloat(GYROSMOOTH_ADR);
-    
-    //gyroLastData = 0.0;  // initalize for rawHeading, may be able to be removed in the future
-    
+    this->_initialize();
     // Check if gyro is connected
-#ifdef AeroQuad_Mini    
-    if (readWhoI2C(gyroAddress) != gyroAddress +1)  // hardcoded for +1 of address specific to sparkfun 6dof imu
-#else    
-    if (readWhoI2C(gyroAddress) != gyroAddress)  // hardcoded for +1 of address specific to sparkfun 6dof imu
-#endif    
-      Serial.println("Gyro not found!");
-        
-    // Thanks to SwiftingSpeed for updates on these settings
-    // http://aeroquad.com/showthread.php?991-AeroQuad-Flight-Software-v2.0&p=11207&viewfull=1#post11207
-    updateRegisterI2C(gyroAddress, 0x3E, 0x80); // send a reset to the device
-    updateRegisterI2C(gyroAddress, 0x16, 0x1D); // 10Hz low pass filter
-    updateRegisterI2C(gyroAddress, 0x3E, 0x01); // use internal oscillator 
+    twiMaster.start(GYRO_ADDRESS | I2C_WRITE);
+    twiMaster.write(0x00);
+    delay(100);
+    twiMaster.start(GYRO_ADDRESS | I2C_READ);
+
+    #ifdef AeroQuad_Mini    
+      if (twiMaster.read(1) != GYRO_ADDRESS/2 + 1)
+    #else    
+      if (twiMaster.read(1) != GYRO_ADDRESS/2)
+    #endif    
+        Serial.println("Gyro not found!");
+    else {
+      twiMaster.start(GYRO_ADDRESS | I2C_WRITE);  // send a reset to the device
+      twiMaster.write(0x3E);
+      twiMaster.write(0x80);
+  
+      twiMaster.start(GYRO_ADDRESS | I2C_WRITE);  // 10Hz low pass filter
+      twiMaster.write(0x16);
+      twiMaster.write(0x1D);
+  
+      twiMaster.start(GYRO_ADDRESS | I2C_WRITE);  // use internal oscillator
+      twiMaster.write(0x3E);
+      twiMaster.write(0x01);
+    }
+    twiMaster.stop();
+    delay(10);
+  }
+/******************************************************/
+
+  void sample(void) {
+    twiMaster.start(GYRO_ADDRESS | I2C_WRITE);
+    twiMaster.write(0x1D);
+    twiMaster.start(GYRO_ADDRESS | I2C_READ);
+
+    #ifdef Loop_200HZ
+      gyroRAW[ROLL][index ^= 1] =  ((twiMaster.read(0) << 8) | twiMaster.read(0))  - gyroZero[ROLL];
+      gyroRAW[PITCH][index ^= 1] = gyroZero[PITCH] - ((twiMaster.read(0) << 8) | twiMaster.read(0));
+      gyroRAW[YAW][index ^= 1]   = gyroZero[YAW]   - ((twiMaster.read(0) << 8) | twiMaster.read(1));
+    #else
+      gyroADC[ROLL] =  ((twiMaster.read(0) << 8) | twiMaster.read(0))  - gyroZero[ROLL];
+      gyroADC[PITCH] = gyroZero[PITCH] - ((twiMaster.read(0) << 8) | twiMaster.read(0));
+      gyroADC[YAW] =   gyroZero[YAW]   - ((twiMaster.read(0) << 8) | twiMaster.read(1));
+    #endif
+
+    twiMaster.stop();
   }
   
-  void measure(void) {
-    sendByteI2C(gyroAddress, 0x1D);
-    Wire.requestFrom(gyroAddress, 6);
+/******************************************************/
 
+  void measure(void) {
     for (byte axis = ROLL; axis < LASTAXIS; axis++) {
-      if (axis == ROLL)
-        gyroADC[axis] = ((Wire.receive() << 8) | Wire.receive()) - gyroZero[axis];
-      else
-        gyroADC[axis] = gyroZero[axis] - ((Wire.receive() << 8) | Wire.receive());
+      #ifdef Loop_200HZ
+        gyroADC[axis] = ((int)((long)((long)gyroRAW[axis][0] + (long)gyroRAW[axis][1] - 1L) / 2L)) + 1; // average the 2 samples with integer rounding
+      #else
+        sample();
+      #endif
       gyroData[axis] = filterSmooth((float)gyroADC[axis] * gyroScaleFactor, gyroData[axis], smoothFactor);
     }
-
-    //calculateHeading();
-    // gyroLastADC can maybe replaced with Zero, but will leave as is for now
-    // this provides a small guard band for the gyro on Yaw before it increments or decrements the rawHeading 
-    long int currentGyroTime = micros();
-    if (gyroData[YAW] > radians(1.0) || gyroData[YAW] < radians(-1.0)) {
-      rawHeading += gyroData[YAW] * ((currentGyroTime - previousGyroTime) / 1000000.0);
-    }
+      
+    //  Calculate gyro based heading
+    long currentGyroTime = micros();
+    if (gyroData[YAW] > radians(1.0) || gyroData[YAW] < radians(-1.0))
+      gyroHeading += gyroData[YAW] * ((currentGyroTime - previousGyroTime) / 1000000.0);
     previousGyroTime = currentGyroTime;
-
+    if (gyroHeading > PI)
+      gyroHeading -= (2*PI);
+    if (gyroHeading < -PI)
+      gyroHeading += (2*PI);
   }
   
-  // returns raw ADC data from the Gyro centered on zero +/- values
-  const int getFlightData(byte axis) {
-    //int reducedData = getRaw(axis) >> 3;
-    //if ((reducedData < 5) && (reducedData > -5)) reducedData = 0;
-    if (axis == PITCH)
-      return -(getRaw(axis) >> 3);
-    else
-      return (getRaw(axis) >> 3);
-  }
+/******************************************************/
 
-  void calibrate() {
+void calibrate() {
     autoZero();
-    writeFloat(gyroZero[ROLL], GYRO_ROLL_ZERO_ADR);
+    writeFloat(gyroZero[ROLL],  GYRO_ROLL_ZERO_ADR);
     writeFloat(gyroZero[PITCH], GYRO_PITCH_ZERO_ADR);
-    writeFloat(gyroZero[YAW], GYRO_YAW_ZERO_ADR);
+    writeFloat(gyroZero[YAW],   GYRO_YAW_ZERO_ADR);
   }
   
-  void autoZero() {
+/******************************************************/
+
+void autoZero() {
     int findZero[FINDZERO];
     for (byte calAxis = ROLL; calAxis < LASTAXIS; calAxis++) {
       for (int i=0; i<FINDZERO; i++) {
-        sendByteI2C(gyroAddress, (calAxis * 2) + 0x1D);
-        findZero[i] = readWordI2C(gyroAddress);
+        twiMaster.start(GYRO_ADDRESS | I2C_WRITE);
+        twiMaster.write((calAxis * 2) + 0x1D);
+        twiMaster.start(GYRO_ADDRESS | I2C_READ);
+        findZero[i] = ((twiMaster.read(0) << 8) | twiMaster.read(1));
         delay(10);
       }
+      twiMaster.stop();
       gyroZero[calAxis] = findMedian(findZero, FINDZERO);
     }
   }
@@ -297,10 +293,13 @@ private:
 public:
   Gyro_ArduCopter() : Gyro() {
     gyroScaleFactor = radians((3.3/4096) / 0.002);  // IDG/IXZ500 sensitivity = 2mV/(deg/sec)
-    gyroFullScaleOutput = 500.0;   // IDG/IXZ500 full scale output = +/- 500 deg/sec
+    previousGyroTime = micros();
   }
   
+/******************************************************/
+
   void initialize(void) {
+    this->_initialize();
     // old AQ way
     // rollChannel = 1
     // pitchChannel = 2
@@ -309,11 +308,15 @@ public:
     // rollChannel = 0
     // pitchChannel = 1
     // yawChannel = 2
-    this->_initialize(0, 1, 2);
+    gyroChannel[ROLL] = 0;
+    gyroChannel[PITCH] = 1;
+    gyroChannel[YAW] = 2;
+    this->_initialize();
     initialize_ArduCopter_ADC(); // this is needed for both gyros and accels, done once in this class
-    smoothFactor = readFloat(GYROSMOOTH_ADR);
   }
   
+/******************************************************/
+
   void measure(void) {
     for (byte axis = ROLL; axis < LASTAXIS; axis++) {
       rawADC = analogRead_ArduCopter_ADC(gyroChannel[axis]);
@@ -324,29 +327,27 @@ public:
           gyroADC[axis] =  gyroZero[axis] - rawADC;
       gyroData[axis] = filterSmooth(gyroADC[axis] * gyroScaleFactor, gyroData[axis], smoothFactor);
     }
-    // gyroLastADC can maybe replaced with Zero, but will leave as is for now
-    // this provides a small guard band for the gyro on Yaw before it increments or decrements the rawHeading 
-    long int currentGyroTime = micros();
-    if (gyroData[YAW] > radians(1.0) || gyroData[YAW] < radians(-1.0)) {
-      rawHeading += gyroData[YAW] * ((currentGyroTime - previousGyroTime) / 1000000.0);
-    }
-    previousGyroTime = currentGyroTime;
-   }
-
-  const int getFlightData(byte axis) {
-    if (axis == PITCH)
-      return -getRaw(axis);
-    else
-      return getRaw(axis);
+    
+    //  Calculate gyro based heading
+    long currentGyroTime = micros();
+    if (gyroData[YAW] > radians(1.0) || gyroData[YAW] < radians(-1.0))
+      gyroHeading += gyroData[YAW] * ((currentGyroTime - previousGyroTime) / 1000000.0);
+      previousGyroTime = currentGyroTime;
+    if (gyroHeading > PI)  gyroHeading -= (2*PI);
+    if (gyroHeading < -PI) gyroHeading += (2*PI);
   }
+
+/******************************************************/
 
   void calibrate() {
     autoZero();
-    writeFloat(gyroZero[ROLL], GYRO_ROLL_ZERO_ADR);
+    writeFloat(gyroZero[ROLL],  GYRO_ROLL_ZERO_ADR);
     writeFloat(gyroZero[PITCH], GYRO_PITCH_ZERO_ADR);
-    writeFloat(gyroZero[YAW], GYRO_YAW_ZERO_ADR);
+    writeFloat(gyroZero[YAW],   GYRO_YAW_ZERO_ADR);
   }
   
+/******************************************************/
+
   void autoZero() {
     int findZero[FINDZERO];
     for (byte calAxis = ROLL; calAxis < LASTAXIS; calAxis++) {
@@ -393,52 +394,51 @@ public:
     previousGyroTime = micros();
   }
   
+/******************************************************/
+
   void initialize(void) {
+    this->_initialize();
     Init_Gyro_Acc(); // defined in DataAquisition.h
-    smoothFactor = readFloat(GYROSMOOTH_ADR);
-    gyroZero[ROLL] = readFloat(GYRO_ROLL_ZERO_ADR);
-    gyroZero[PITCH] = readFloat(GYRO_PITCH_ZERO_ADR);
-    gyroZero[ZAXIS] = readFloat(GYRO_YAW_ZERO_ADR);
   }
   
+/******************************************************/
+
   void measure(void) {
     updateControls(); // defined in DataAcquisition.h
     
     // Original Wii sensor orientation
-    //gyroADC[ROLL] =  NWMP_gyro[1]  - gyroZero[1];
-    //gyroADC[PITCH] = NWMP_gyro[0] - gyroZero[0];
-    //gyroADC[YAW] =   gyroZero[YAW] - NWMP_gyro[YAW];
+    //gyroADC[ROLL]  = NWMP_gyro[1]  - gyroZero[1];
+    //gyroADC[PITCH] = NWMP_gyro[0]  - gyroZero[0];
+    //gyroADC[YAW]   = gyroZero[YAW] - NWMP_gyro[YAW];
 
-    gyroADC[ROLL] =  gyroZero[ROLL]   - NWMP_gyro[ROLL];  // Configured for Paris MultiWii Board
+    gyroADC[ROLL]  = gyroZero[ROLL]   - NWMP_gyro[ROLL];  // Configured for Paris MultiWii Board
     gyroADC[PITCH] = NWMP_gyro[PITCH] - gyroZero[PITCH];  // Configured for Paris MultiWii Board
-    gyroADC[YAW] =   gyroZero[YAW]    - NWMP_gyro[YAW];   // Configured for Paris MultiWii Board
+    gyroADC[YAW]   = gyroZero[YAW]    - NWMP_gyro[YAW];   // Configured for Paris MultiWii Board
     
     for (byte axis = ROLL; axis < LASTAXIS; axis++) { 
       gyroScaleFactor = wmpSlow[axis] ? wmpLowRangeToRadPerSec : wmpHighRangeToRadPerSec ;  // if wmpSlow == 1, use low range conversion,
       gyroData[axis] = filterSmooth(gyroADC[axis] * gyroScaleFactor, gyroData[axis], smoothFactor); 
     }
-    // gyroLastADC can maybe replaced with Zero, but will leave as is for now
-    // this provides a small guard band for the gyro on Yaw before it increments or decrements the rawHeading 
-    long int currentGyroTime = micros();
-    if (gyroData[YAW] > radians(1.0) || gyroData[YAW] < radians(-1.0)) {
-      rawHeading += gyroData[YAW] * ((currentGyroTime - previousGyroTime) / 1000000.0);
-    }
-    previousGyroTime = currentGyroTime;
+    
+    //  Calculate gyro based heading
+    long currentGyroTime = micros();
+    if (gyroData[YAW] > radians(1.0) || gyroData[YAW] < radians(-1.0))
+      gyroHeading += gyroData[YAW] * ((currentGyroTime - previousGyroTime) / 1000000.0);
+      previousGyroTime = currentGyroTime;
+    if (gyroHeading > PI)  gyroHeading -= (2*PI);
+    if (gyroHeading < -PI) gyroHeading += (2*PI);
   }
 
-  const int getFlightData(byte axis) {
-    if (axis == PITCH)
-      return -getRaw(PITCH) / 18;
-    else
-      return getRaw(axis) / 18;
-  }
+/******************************************************/
 
   void calibrate() {
     autoZero();
-    writeFloat(gyroZero[ROLL], GYRO_ROLL_ZERO_ADR);
+    writeFloat(gyroZero[ROLL],  GYRO_ROLL_ZERO_ADR);
     writeFloat(gyroZero[PITCH], GYRO_PITCH_ZERO_ADR);
-    writeFloat(gyroZero[YAW], GYRO_YAW_ZERO_ADR);
+    writeFloat(gyroZero[YAW],   GYRO_YAW_ZERO_ADR);
   }
+
+/******************************************************/
 
   void autoZero() {
     int findZero[FINDZERO];
@@ -462,11 +462,13 @@ class Gyro_CHR6DM : public Gyro {
 
 public:
   Gyro_CHR6DM() : Gyro() {
-    gyroFullScaleOutput = 0;
-    gyroScaleFactor = 0;
+   gyroScaleFactor = 0;
+   previousGyroTime = micros();
   }
 
-  void initialize(void) {
+ /******************************************************/
+
+ void initialize(void) {
     smoothFactor = readFloat(GYROSMOOTH_ADR);
     gyroZero[ROLL] = readFloat(GYRO_ROLL_ZERO_ADR);
     gyroZero[PITCH] = readFloat(GYRO_PITCH_ZERO_ADR);
@@ -474,36 +476,39 @@ public:
     initCHR6DM();
   }
 
+/******************************************************/
+
   void measure(void) {
-    //currentTime = micros();
     readCHR6DM();
-    gyroADC[ROLL] = chr6dm.data.rollRate - gyroZero[ROLL]; //gx yawRate
-    gyroADC[PITCH] = gyroZero[PITCH] - chr6dm.data.pitchRate; //gy pitchRate
-    gyroADC[YAW] = chr6dm.data.yawRate - gyroZero[ZAXIS]; //gz rollRate
+    gyroADC[ROLL] =  chr6dm.data.rollRate - gyroZero[ROLL];
+    gyroADC[PITCH] = gyroZero[PITCH]      - chr6dm.data.pitchRate;
+    gyroADC[YAW] =   chr6dm.data.yawRate  - gyroZero[ZAXIS];
 
-    //gyroData[ROLL] = filterSmoothWithTime(gyroADC[ROLL], gyroData[ROLL], smoothFactor, ((currentTime - previousTime) / 5000.0)); //expect 5ms = 5000Ã‚Âµs = (current-previous) / 5000.0 to get around 1
-    //gyroData[PITCH] = filterSmoothWithTime(gyroADC[PITCH], gyroData[PITCH], smoothFactor, ((currentTime - previousTime) / 5000.0)); //expect 5ms = 5000Ã‚Âµs = (current-previous) / 5000.0 to get around 1
-    //gyroData[YAW] = filterSmoothWithTime(gyroADC[YAW], gyroData[YAW], smoothFactor, ((currentTime - previousTime) / 5000.0)); //expect 5ms = 5000Ã‚Âµs = (current-previous) / 5000.0 to get around 1
-    gyroData[ROLL] = filterSmooth(gyroADC[ROLL], gyroData[ROLL], smoothFactor); //expect 5ms = 5000Ã‚Âµs = (current-previous) / 5000.0 to get around 1
-    gyroData[PITCH] = filterSmooth(gyroADC[PITCH], gyroData[PITCH], smoothFactor); //expect 5ms = 5000Ã‚Âµs = (current-previous) / 5000.0 to get around 1
-    gyroData[YAW] = filterSmooth(gyroADC[YAW], gyroData[YAW], smoothFactor); //expect 5ms = 5000Ã‚Âµs = (current-previous) / 5000.0 to get around 1
+    gyroData[ROLL] =  filterSmooth(gyroADC[ROLL],  gyroData[ROLL],  smoothFactor);
+    gyroData[PITCH] = filterSmooth(gyroADC[PITCH], gyroData[PITCH], smoothFactor);
+    gyroData[YAW] =   filterSmooth(gyroADC[YAW],   gyroData[YAW],   smoothFactor);
     
-    //previousTime = currentTime;
+    //  Calculate gyro based heading
+    long currentGyroTime = micros();
+    if (gyroData[YAW] > radians(1.0) || gyroData[YAW] < radians(-1.0))
+      gyroHeading += gyroData[YAW] * ((currentGyroTime - previousGyroTime) / 1000000.0);
+      previousGyroTime = currentGyroTime;
+    if (gyroHeading > PI)  gyroHeading -= (2*PI);
+    if (gyroHeading < -PI) gyroHeading += (2*PI);
   }
 
-  const int getFlightData(byte axis) {
-    return getRaw(axis);
-  }
+/******************************************************/
 
   void calibrate() {
     autoZero();
-    writeFloat(gyroZero[ROLL], GYRO_ROLL_ZERO_ADR);
+    writeFloat(gyroZero[ROLL],  GYRO_ROLL_ZERO_ADR);
     writeFloat(gyroZero[PITCH], GYRO_PITCH_ZERO_ADR);
-    writeFloat(gyroZero[YAW], GYRO_YAW_ZERO_ADR);
+    writeFloat(gyroZero[YAW],   GYRO_YAW_ZERO_ADR);
   }
 
-  void autoZero() {
+/******************************************************/
 
+  void autoZero() {
     float zeroXreads[FINDZERO];
     float zeroYreads[FINDZERO];
     float zeroZreads[FINDZERO];
@@ -523,4 +528,3 @@ public:
   }
 };
 #endif
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             

@@ -147,7 +147,7 @@
     const int HEADER_CHECKSUM = 's'+'n'+'p';
 
 
-#include <Wire.h>
+// HJI #include <Wire.h>
 
 
 

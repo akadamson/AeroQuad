@@ -35,7 +35,7 @@ public:
   float magOffset[3];
   float hdgX;
   float hdgY;
-  int   compassAddress;
+//  int   compassAddress;
   float measuredMagX;
   float measuredMagY;
   float measuredMagZ;
@@ -47,7 +47,7 @@ public:
     if (axis == YAXIS) return hdgY;
   }
 
-    const int getRawData(byte axis) {
+  const int getRaw(byte axis) {
     if (axis == XAXIS) return measuredMagX;
     if (axis == YAXIS) return measuredMagY;
     if (axis == ZAXIS) return measuredMagZ;
@@ -93,7 +93,8 @@ private:
 
 public: 
   Magnetometer_HMC5843() : Compass() {
-    compassAddress = 0x1E;
+    // HJI compassAddress = 0x1E;
+    #define COMPASS_ADDRESS 0x3C  // HJI
   }
 
   ////////////////////////////////////////////////////////////////////////////////
@@ -113,19 +114,29 @@ public:
       
       numAttempts++;
    
-      updateRegisterI2C(compassAddress, 0x00, 0x11);  // Set positive bias configuration for sensor calibraiton
+      // HJI updateRegisterI2C(compassAddress, 0x00, 0x11);  // Set Positive bias for calibration and set update rate to 10hz (default)
+      twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);                                       // HJI
+      twiMaster.write(0x00);                                                             // HJI
+      twiMaster.write(0x11);  // Set positive bias configuration for sensor calibraiton  // HJI
       delay(50);
    
-      updateRegisterI2C(compassAddress, 0x01, 0x20); // Set +/- 1G gain
+      // HJI updateRegisterI2C(compassAddress, 0x01, 0x20); // Set +/- 1G gain
+      twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);  // HJI
+      twiMaster.write(0x01);                        // HJI
+      twiMaster.write(0x20);  // Set +/- 1G gain    // HJI
       delay(10);
 
-      updateRegisterI2C(compassAddress, 0x02, 0x01);  // Perform single conversion
+      // HJI updateRegisterI2C(compassAddress, 0x02, 0x01);  // Perform single conversion
+      twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);          // HJI
+      twiMaster.write(0x02);                                // HJI
+      twiMaster.write(0x01);  // Perform single conversion  // HJI
+      twiMaster.stop();
       delay(10);
    
       measure(0.0, 0.0);                    // Read calibration data
       delay(10);
    
-      if ( fabs(measuredMagX) > 500.0 && fabs(measuredMagX) < 1000.0 \
+      if (   fabs(measuredMagX) > 500.0 && fabs(measuredMagX) < 1000.0 \
           && fabs(measuredMagY) > 500.0 && fabs(measuredMagY) < 1000.0 \
           && fabs(measuredMagZ) > 500.0 && fabs(measuredMagZ) < 1000.0) {
         magCalibration[XAXIS] = fabs(715.0 / measuredMagX);
@@ -135,11 +146,18 @@ public:
         success = true;
       }
    
-      updateRegisterI2C(compassAddress, 0x00, 0x10);  // Set 10hz update rate and normal operaiton
+      // HJI updateRegisterI2C(compassAddress, 0x00, 0x10);  // Set 10hz update rate and normal operaiton
+      twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);                           // HJI
+      twiMaster.write(0x00);                                                 // HJI
+      twiMaster.write(0x10);  // Set 10 Hz update rate and normal operation  // HJI
       delay(50);
 
-      updateRegisterI2C(compassAddress, 0x02, 0x00); // Continuous Update mode
-      delay(50);                           // Mode change delay (1/Update Rate) **
+      // HJI updateRegisterI2C(compassAddress, 0x02, 0x00); // Continuous Update mode
+      twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);       // HJI
+      twiMaster.write(0x02);                             // HJI
+      twiMaster.write(0x00);  // Continuous update mode  // HJI
+      twiMaster.stop();                                  // HJI
+      delay(100);             // Mode change delay (1/Update Rate) **
     }
 
     measure(0.0, 0.0);  // Assume 1st measurement at 0 degrees roll and 0 degrees pitch
@@ -154,14 +172,21 @@ public:
     float magY;
     float tmp;
     
-    sendByteI2C(compassAddress, 0x03);
-    Wire.requestFrom(compassAddress, 6);
+    // HJI sendByteI2C(compassAddress, 0x03);
+    // HJI Wire.requestFrom(compassAddress, 6);
+    twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);                                             // HJI
+    twiMaster.write(0x03);                                                                   // HJI
+    twiMaster.start(COMPASS_ADDRESS | I2C_READ);                                              // HJI
 
-    measuredMagX =  ((Wire.receive() << 8) | Wire.receive()) * magCalibration[XAXIS];
-    measuredMagY = -((Wire.receive() << 8) | Wire.receive()) * magCalibration[YAXIS];
-    measuredMagZ = -((Wire.receive() << 8) | Wire.receive()) * magCalibration[ZAXIS];
+    // HJI measuredMagX =  ((Wire.receive() << 8) | Wire.receive()) * magCalibration[XAXIS];
+    // HJI measuredMagY = -((Wire.receive() << 8) | Wire.receive()) * magCalibration[YAXIS];
+    // HJI measuredMagZ = -((Wire.receive() << 8) | Wire.receive()) * magCalibration[ZAXIS];
+    measuredMagX =  ((twiMaster.read(0) << 8) | twiMaster.read(0)) * magCalibration[XAXIS];  // HJI
+    measuredMagY = -((twiMaster.read(0) << 8) | twiMaster.read(0)) * magCalibration[YAXIS];  // HJI
+    measuredMagZ = -((twiMaster.read(0) << 8) | twiMaster.read(1)) * magCalibration[ZAXIS];  // HJI
 
-    Wire.endTransmission();
+    // HJI Wire.endTransmission();
+    twiMaster.stop();                                                                        // HJI
 
     cosRoll =  cos(roll);
     sinRoll =  sin(roll);

@@ -52,11 +52,8 @@ void nvrReadPID(unsigned char IDPid, unsigned int IDEeprom) {
   pid->lastPosition = 0;
   pid->integratedError = 0;
   // AKA experiements with PIDS
+  pid->pidID = IDPid;
   pid->firstPass = true;
-  if (IDPid == HEADING)
-    pid->typePID = TYPEPI;
-  else
-    pid->typePID = NOTYPE;
 }
 
 void nvrWritePID(unsigned char IDPid, unsigned int IDEeprom) {
@@ -86,8 +83,6 @@ void initializeEEPROM(void) {
   PID[HEADING].P = 3.0;
   PID[HEADING].I = 0.1;
   PID[HEADING].D = 0.0;
-  // AKA PID experiements
-  PID[HEADING].typePID = TYPEPI;
   PID[LEVELGYROROLL].P = 100.0;
   PID[LEVELGYROROLL].I = 0.0;
   PID[LEVELGYROROLL].D = -300.0;
@@ -119,19 +114,12 @@ void initializeEEPROM(void) {
     if (i != ALTITUDE)
         PID[i].windupGuard = windupGuard;
   }
-  // AKA added so that each PID has a type incase we need special cases like detecting +/- PI
-  for (byte i = ROLL; i <= ZDAMPENING; i++ ) {
-    if (i != HEADING)
-        PID[i].typePID = NOTYPE;
-  }
     
   receiver.setXmitFactor(1.0);
-//  levelLimit = 500.0;
-//  levelOff = 150.0;
+  //levelLimit = 500.0;
+  //levelOff = 150.0;
   gyro.setSmoothFactor(1.0);
   accel.setSmoothFactor(1.0);
-  // AKA - old setOneG not in SI - accel.setOneG(500);
-  accel.setOneG(9.80665); // AKA set one G to 9.8 m/s^2
   timeConstant = 7.0;
   for (byte channel = ROLL; channel < LASTCHANNEL; channel++) {
     receiver.setTransmitterSlope(channel, 1.0);
@@ -141,7 +129,7 @@ void initializeEEPROM(void) {
   receiver.setSmoothFactor(YAW, 0.5);
 
   smoothHeading = 1.0;
-  flightMode = ACRO;
+  flightMode = RATE;
   headingHoldConfig = OFF;
   minAcro = 1300;
   aref = 5.0; // Use 3.0 if using a v1.7 shield or use 2.8 for an AeroQuad Shield < v1.7
@@ -179,9 +167,9 @@ void readEEPROM(void) {
     PID[ALTITUDE].windupGuard = readFloat(ALTITUDE_WINDUP_ADR);
     minThrottleAdjust = readFloat(ALTITUDE_MIN_THROTTLE_ADR);
     maxThrottleAdjust = readFloat(ALTITUDE_MAX_THROTTLE_ADR);
-#ifdef AltitudeHold    
+  #ifdef AltitudeHold    
     altitude.setSmoothFactor(readFloat(ALTITUDE_SMOOTH_ADR));
-#endif
+  #endif
     readPID(ZDAMPENING, ZDAMP_PID_GAIN_ADR);
 //  #endif
 
@@ -207,7 +195,7 @@ void readEEPROM(void) {
   flightMode = readFloat(FLIGHTMODE_ADR);
   headingHoldConfig = readFloat(HEADINGHOLD_ADR);
   minAcro = readFloat(MINACRO_ADR);
-  accel.setOneG(readFloat(ACCEL1G_ADR));
+//  accel.setOneG(readFloat(ACCEL1G_ADR));
   
   /*#ifdef Camera
   mCameraPitch = readFloat(MCAMERAPITCH_ADR);
@@ -295,7 +283,7 @@ void writeEEPROM(void){
   writeFloat(flightMode, FLIGHTMODE_ADR);
   writeFloat(headingHoldConfig, HEADINGHOLD_ADR);
   writeFloat(minAcro, MINACRO_ADR);
-  writeFloat(accel.getOneG(), ACCEL1G_ADR);
+//  writeFloat(accel.getOneG(), ACCEL1G_ADR);
     
   /*#ifdef Camera
   writeFloat(mCameraPitch, MCAMERAPITCH_ADR);

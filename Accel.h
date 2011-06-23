@@ -20,79 +20,55 @@
 
 class Accel {
 public:
-  float accelScaleFactor;
   float smoothFactor;
-  float rawAltitude;
   int accelChannel[3];
   #if defined(AeroQuadMega_CHR6DM) || defined(APM_OP_CHR6DM)
     float accelZero[3];
   #else
-    int accelZero[3];
   #endif
   float accelData[3];
   int accelADC[3];
-//  int sign[3];
-  float accelOneG, zAxis;
+  #ifdef Loop_200HZ
+    int accelRAW[3][2];
+    byte index;
+  #endif    
+  float accelBias[3];
+  float accelScaleFactor[3];
+  
   byte rollChannel, pitchChannel, zAxisChannel;
   
   Accel(void) {
-//    sign[ROLL] = 1;
-//    sign[PITCH] = 1;
-//    sign[YAW] = 1;
-    zAxis = 0;
   }
 
-  // ******************************************************************
-  // The following function calls must be defined in any new subclasses
-  // ******************************************************************
-  virtual void initialize(void);
-//  virtual void initialize(void) {
-//    this->_initialize(rollChannel, pitchChannel, zAxisChannel);
-//  }
-  virtual void measure(void);
-  virtual void calibrate(void);
-  virtual const int getFlightData(byte);
-
-  // **************************************************************
-  // The following functions are common between all Accel subclasses
-  // **************************************************************
-  void _initialize(byte rollChannel, byte pitchChannel, byte zAxisChannel) {
-    accelChannel[ROLL] = rollChannel;
-    accelChannel[PITCH] = pitchChannel;
-    accelChannel[ZAXIS] = zAxisChannel;
-    accelOneG        = readFloat(ACCEL1G_ADR);
-    accelZero[XAXIS] = readFloat(LEVELPITCHCAL_ADR);
-    accelZero[YAXIS] = readFloat(LEVELROLLCAL_ADR);
-    accelZero[ZAXIS] = readFloat(LEVELZCAL_ADR);
+  void _initialize(void) {
+    accelBias[XAXIS] = readFloat(XAXIS_ACCEL_BIAS_ADR);
+    accelBias[YAXIS] = readFloat(YAXIS_ACCEL_BIAS_ADR);
+    accelBias[ZAXIS] = readFloat(ZAXIS_ACCEL_BIAS_ADR);
+    
+    accelScaleFactor[XAXIS] = readFloat(XAXIS_ACCEL_SCALE_FACTOR_ADR);
+    accelScaleFactor[YAXIS] = readFloat(YAXIS_ACCEL_SCALE_FACTOR_ADR);
+    accelScaleFactor[ZAXIS] = readFloat(ZAXIS_ACCEL_SCALE_FACTOR_ADR);
+    
+    smoothFactor = readFloat(ACCSMOOTH_ADR);
+    
+    #ifdef Loop_200HZ
+      index = 1;  // AKA index value for flip/flop store of 2 sample average
+      // init flip/flop array to zero
+      for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
+        accelRAW[axis][0] = 0;
+        accelRAW[axis][1] = 0;
+      }
+    #endif
   }
-  
+
   // return the raw ADC value from the accel, with sign change if need, not smoothed or scaled to SI units
   const int getRaw(byte axis) {
-    return accelADC[axis];// * sign[axis];
+    return accelADC[axis];
   }
   
   // return the smoothed and scaled to SI units value of the accel with sign change if needed
   const float getData(byte axis) {
-    return accelData[axis];// * sign[axis];
-  }
-  
-  // invert the sign for a specifica accel axis
-//  const int invert(byte axis) {
-//    sign[axis] = -sign[axis];
-//    return sign[axis];
-//  }
-  
-  const int getZero(byte axis) {
-    return accelZero[axis];
-  }
-  
-  void setZero(byte axis, int value) {
-    accelZero[axis] = value;
-  }
-  
-  // returns the SI scale factor
-  const float getScaleFactor(void) {
-    return accelScaleFactor;
+    return ((accelData[axis] - accelBias[axis]) * accelScaleFactor[axis]);
   }
   
   // returns the smoothfactor
@@ -102,18 +78,6 @@ public:
   
   void setSmoothFactor(float value) {
     smoothFactor = value;
-  }
-  
-  void setOneG(float value) {
-    accelOneG = value;
-  }
-  
-  const float getOneG(void) {
-    return accelOneG;
-  }
-  
-  const float getZaxis() {
-    return accelOneG - getData(ZAXIS);
   }
 };
 
@@ -125,54 +89,28 @@ class Accel_AeroQuad_v1 : public Accel {
 private:
   
 public:
-  Accel_AeroQuad_v1() : Accel(){
+  Accel_AeroQuad_v1() : Accel() {
   }
   
+/******************************************************/
+
   void initialize(void) {
-    // rollChannel = 1
-    // pitchChannel = 0
-    // zAxisChannel = 2
-    this->_initialize(1, 0, 2);
-    smoothFactor     = readFloat(ACCSMOOTH_ADR);
-    accelScaleFactor = G_2_MPS2((aref/1024.0) / 0.300);
-    //accelScaleFactor = G_2_MPS2(((aref*1000)/1024)/(aref*100));
+    this->_initialize();
+    accelChannel[XAXIS] = 1;
+    accelChannel[YAXIS] = 0;
+    accelChannel[ZAXIS] = 2;
   }
   
+/******************************************************/
+
   void measure(void) {
-    accelADC[XAXIS] = analogRead(accelChannel[PITCH]) - accelZero[PITCH];
-    accelADC[YAXIS] = accelZero[ROLL] - analogRead(accelChannel[ROLL]);
-    accelADC[ZAXIS] = accelZero[ZAXIS] - analogRead(accelChannel[ZAXIS]);
+    accelADC[XAXIS] = analogRead(accelChannel[PITCH]);
+    accelADC[YAXIS] = analogRead(accelChannel[ROLL]);
+    accelADC[ZAXIS] = analogRead(accelChannel[ZAXIS]);
     for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
       //accelData[axis] = computeFirstOrder(accelADC[axis] * accelScaleFactor, &firstOrder[axis]);
-      accelData[axis] = filterSmooth(accelADC[axis] * accelScaleFactor, accelData[axis], smoothFactor);
+      accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
     }
-  }
-
-  const int getFlightData(byte axis) {
-    return getRaw(axis);
-  }
-  
-  // Allows user to zero accelerometers on command
-  void calibrate(void) {
-    int findZero[FINDZERO];
-
-    for (byte calAxis = XAXIS; calAxis < LASTAXIS; calAxis++) {
-      for (int i=0; i<FINDZERO; i++) {
-        findZero[i] = analogRead(accelChannel[calAxis]);
-      }
-      accelZero[calAxis] = findMedian(findZero, FINDZERO);
-    }
-    
-    // store accel value that represents 1g
-    measure();
-    accelOneG = -accelData[ZAXIS];
-    // replace with estimated Z axis 0g value
-    accelZero[ZAXIS] = (accelZero[XAXIS] + accelZero[YAXIS]) / 2;
-    
-    writeFloat(accelOneG, ACCEL1G_ADR);
-    writeFloat(accelZero[YAXIS], LEVELROLLCAL_ADR);
-    writeFloat(accelZero[XAXIS], LEVELPITCHCAL_ADR);
-    writeFloat(accelZero[ZAXIS], LEVELZCAL_ADR);
   }
 };
 #endif
@@ -183,105 +121,90 @@ public:
 #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2)
 class Accel_AeroQuadMega_v2 : public Accel {
 private:
-  int accelAddress;
+//  int accelAddress;
   
 public:
   Accel_AeroQuadMega_v2() : Accel(){
-    accelAddress = 0x40; // page 54 and 61 of datasheet
-    accelScaleFactor = G_2_MPS2(1.0/4096.0);  //  g per LSB @ +/- 2g range
+    #define ACCEL_ADDRESS 0x80  // page 54 and 61 of datasheet
   }
   
+/******************************************************/
+
   void initialize(void) {
     byte data;
-    
-//    this->_initialize(0,1,2);  // AKA added for consistency
-  
-    accelOneG        = readFloat(ACCEL1G_ADR);
-    accelZero[XAXIS] = readFloat(LEVELPITCHCAL_ADR);
-    accelZero[YAXIS] = readFloat(LEVELROLLCAL_ADR);
-    accelZero[ZAXIS] = readFloat(LEVELZCAL_ADR);
-    smoothFactor     = readFloat(ACCSMOOTH_ADR);
-    
+
+    this->_initialize();
     // Check if accel is connected
-    if (readWhoI2C(accelAddress) != 0x03) // page 52 of datasheet
+    twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
+    twiMaster.write(0x00);
+    delay(100);
+    twiMaster.start(ACCEL_ADDRESS | I2C_READ);
+    if (twiMaster.read(1) != 0x03)                
       Serial.println("Accelerometer not found!");
-
-    // Thanks to SwiftingSpeed for updates on these settings
-    // http://aeroquad.com/showthread.php?991-AeroQuad-Flight-Software-v2.0&p=11207&viewfull=1#post11207
-    updateRegisterI2C(accelAddress, 0x10, 0xB6); //reset device
-    delay(10);  //sleep 10 ms after reset (page 25)
-
-    // In datasheet, summary register map is page 21
-    // Low pass filter settings is page 27
-    // Range settings is page 28
-    updateRegisterI2C(accelAddress, 0x0D, 0x10); //enable writing to control registers
-    sendByteI2C(accelAddress, 0x20); // register bw_tcs (bits 4-7)
-    data = readByteI2C(accelAddress); // get current register value
-    updateRegisterI2C(accelAddress, 0x20, data & 0x0F); // set low pass filter to 10Hz (value = 0000xxxx)
-
-    // From page 27 of BMA180 Datasheet
-    //  1.0g = 0.13 mg/LSB
-    //  1.5g = 0.19 mg/LSB
-    //  2.0g = 0.25 mg/LSB
-    //  3.0g = 0.38 mg/LSB
-    //  4.0g = 0.50 mg/LSB
-    //  8.0g = 0.99 mg/LSB
-    // 16.0g = 1.98 mg/LSB
-    sendByteI2C(accelAddress, 0x35); // register offset_lsb1 (bits 1-3)
-    data = readByteI2C(accelAddress);
-    data &= 0xF1;
-    data |= 0x04; // Set range select bits for +/-2g
-    updateRegisterI2C(accelAddress, 0x35, data);
+    else {
+      twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
+      twiMaster.write(0x10);
+      twiMaster.write(0xB6);  // Reset device
+      
+      delay(10); // sleep 10 ms after reset (page 25)
+      
+      twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
+      twiMaster.write(0x0D);
+      twiMaster.write(0x10);  // Enable writting to control registers
+      
+      twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
+      twiMaster.write(0x20);  // Register bw_tcs (bits 4-7)
+      
+      twiMaster.start(ACCEL_ADDRESS | I2C_READ);
+      data = twiMaster.read(1);
+      
+      twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
+      twiMaster.write(0x20);
+      twiMaster.write(data & 0x0F);  // Set low pass filter to 10 Hz (value = 0000xxxx)
+      
+      twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
+      twiMaster.write(0x35);
+      
+      twiMaster.start(ACCEL_ADDRESS | I2C_READ);
+      data = twiMaster.read(1);
+      data &= 0xF1;
+      data |= 0x08;
+      
+      twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
+      twiMaster.write(0x35);
+      twiMaster.write(data);  // Set range select bits for +/- 4g
+    }
+    twiMaster.stop();
   }
   
-  void measure(void) {
-    //int rawData[3];
+/******************************************************/
 
-    Wire.beginTransmission(accelAddress);
-    Wire.send(0x02);
-    Wire.endTransmission();
-    Wire.requestFrom(accelAddress, 6);
+  void sample(void) {
+    twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
+    twiMaster.write(0x02);
+    twiMaster.start(ACCEL_ADDRESS | I2C_READ);
     for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
-      if (axis == XAXIS)
-        accelADC[axis] = ((Wire.receive()|(Wire.receive() << 8)) >> 2) - accelZero[axis];
-      else
-        accelADC[axis] = accelZero[axis] - ((Wire.receive()|(Wire.receive() << 8)) >> 2);
+      #ifdef Loop_200HZ
+        accelRAW[axis][index ^= 1] = ((twiMaster.read(0)|(twiMaster.read((axis*2+1) == 5) << 8)));
+      #else
+        accelADC[axis] = ((twiMaster.read(0)|(twiMaster.read((axis*2+1) == 5) << 8)));
+      #endif
+    }
+    twiMaster.stop();
+  }
+
+/******************************************************/
+
+  void measure(void) {
+    for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
+      #ifdef Loop_200HZ
+        accelADC[axis] = ((int)((long)((long)accelRAW[axis][0] + (long)accelRAW[axis][1] - 1L) / 2L)) + 1; // average the 2 samples with integer rounding
+      #else
+        sample();
+      #endif
       //accelData[axis] = computeFirstOrder(accelADC[axis] * accelScaleFactor, &firstOrder[axis]);
-      accelData[axis] = filterSmooth(accelADC[axis] * accelScaleFactor, accelData[axis], smoothFactor);
+      accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
     }
-  }
-
-  const int getFlightData(byte axis) {
-      return getRaw(axis) >> 3;
-  }
-  
-  // Allows user to zero accelerometers on command
-  void calibrate(void) {  
-    int findZero[FINDZERO];
-    int dataAddress;
-    
-    for (byte calAxis = XAXIS; calAxis < ZAXIS; calAxis++) {
-      if (calAxis == XAXIS) dataAddress = 0x02;
-      if (calAxis == YAXIS) dataAddress = 0x04;
-      if (calAxis == ZAXIS) dataAddress = 0x06;
-      for (int i=0; i<FINDZERO; i++) {
-        sendByteI2C(accelAddress, dataAddress);
-        findZero[i] = readReverseWordI2C(accelAddress) >> 2; // last two bits are not part of measurement
-        delay(10);
-      }
-      accelZero[calAxis] = findMedian(findZero, FINDZERO);
-    }
-
-    // replace with estimated Z axis 0g value
-    accelZero[ZAXIS] = (accelZero[XAXIS] + accelZero[PITCH]) / 2;
-    // store accel value that represents 1g
-    measure();
-    accelOneG = -accelData[ZAXIS];
-     
-    writeFloat(accelOneG,        ACCEL1G_ADR);
-    writeFloat(accelZero[XAXIS], LEVELPITCHCAL_ADR);
-    writeFloat(accelZero[YAXIS], LEVELROLLCAL_ADR);
-    writeFloat(accelZero[ZAXIS], LEVELZCAL_ADR);
   }
 };
 #endif
@@ -292,81 +215,67 @@ public:
 #if defined(AeroQuad_Mini)
 class Accel_AeroQuadMini : public Accel {
 private:
-  int accelAddress;
+//  int accelAddress;
   
 public:
   Accel_AeroQuadMini() : Accel(){
-    accelAddress = 0x53; // page 10 of datasheet
-    accelScaleFactor = G_2_MPS2(4.0/1024.0);  // +/- 2G at 10bits of ADC
+    #define ACCEL_ADDRESS 0xA6  // page 10 of datasheet
   }
   
-  void initialize(void) {
-//    byte data;
-    
-//    this->_initialize(0,1,2);  // AKA added for consistency
-  
-    accelOneG        = readFloat(ACCEL1G_ADR);
-    accelZero[XAXIS] = readFloat(LEVELPITCHCAL_ADR);
-    accelZero[YAXIS] = readFloat(LEVELROLLCAL_ADR);
-    accelZero[ZAXIS] = readFloat(LEVELZCAL_ADR);
-    smoothFactor     = readFloat(ACCSMOOTH_ADR);
-    
-    // Check if accel is connected
-    
-    if (readWhoI2C(accelAddress) !=  0xE5) // page 14 of datasheet
-      Serial.println("Accelerometer not found!");
+/******************************************************/
 
-    updateRegisterI2C(accelAddress, 0x2D, 1<<3); // set device to *measure*
-    updateRegisterI2C(accelAddress, 0x31, 0x08); // set full range and +/- 2G
-    updateRegisterI2C(accelAddress, 0x2C, 8+2+1);    // 200hz sampling
+  void initialize(void) {
+    this->_initialize();
+    twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
+    twiMaster.write(0x00);
+    delay(100);
+    twiMaster.start(ACCEL_ADDRESS | I2C_READ);
+    if (twiMaster.read(1) != 0xE5)
+      Serial.println("Accelerometer not found!");
+    else {
+      twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);  // set device to *measure*
+      twiMaster.write(0x2D);
+      twiMaster.write(0x08);
+  
+      twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);  // set full resolution and +/- 4G
+      twiMaster.write(0x31);
+      twiMaster.write(0x09);
+  
+      twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);  // 200hz sampling
+      twiMaster.write(0x2C);
+      twiMaster.write(0x0B);
+    }
+    twiMaster.stop();
     delay(10); 
   }
   
-  void measure(void) {
+/******************************************************/
 
-    sendByteI2C(accelAddress, 0x32);
-    Wire.requestFrom(accelAddress, 6);
+  void sample(void) {
+    twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
+    twiMaster.write(0x32);
+    twiMaster.start(ACCEL_ADDRESS | I2C_READ);
     for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
-      if (axis == XAXIS)
-        accelADC[axis] = ((Wire.receive()|(Wire.receive() << 8))) - accelZero[axis];
-      else
-        accelADC[axis] = accelZero[axis] - ((Wire.receive()|(Wire.receive() << 8)));
+      #ifdef Loop_200HZ
+        accelRAW[axis][index ^= 1] = ((twiMaster.read(0)|(twiMaster.read((axis*2+1) == 5) << 8)));
+      #else
+        accelADC[axis] = ((twiMaster.read(0)|(twiMaster.read((axis*2+1) == 5) << 8)));
+      #endif
+    }
+    twiMaster.stop();
+  }
+/******************************************************/
+
+  void measure(void) {
+    for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
+      #ifdef Loop_200HZ
+        accelADC[axis] = ((accelRAW[axis][0] + accelRAW[axis][1] - 1) / 2 ) + 1; // average the 2 samples with integer rounding
+      #else
+        sample();
+      #endif
       //accelData[axis] = computeFirstOrder(accelADC[axis] * accelScaleFactor, &firstOrder[axis]);
-      accelData[axis] = filterSmooth(accelADC[axis] * accelScaleFactor, accelData[axis], smoothFactor);
+      accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
     }
-  }
-
-  const int getFlightData(byte axis) {
-      return getRaw(axis);
-  }
-  
-  // Allows user to zero accelerometers on command
-  void calibrate(void) {  
-    int findZero[FINDZERO];
-    int dataAddress;
-    
-    for (byte calAxis = XAXIS; calAxis < ZAXIS; calAxis++) {
-      if (calAxis == XAXIS) dataAddress = 0x32;
-      if (calAxis == YAXIS) dataAddress = 0x34;
-      if (calAxis == ZAXIS) dataAddress = 0x36;
-      for (byte i=0; i<FINDZERO; i++) {
-        sendByteI2C(accelAddress, dataAddress);
-        findZero[i] = readReverseWordI2C(accelAddress);
-        delay(10);
-      }
-      accelZero[calAxis] = findMedian(findZero, FINDZERO);
-    }
-
-    // replace with estimated Z axis 0g value
-    accelZero[ZAXIS] = (accelZero[XAXIS] + accelZero[PITCH]) / 2;
-    // store accel value that represents 1g
-    measure();
-    accelOneG = -accelData[ZAXIS];
-     
-    writeFloat(accelOneG,        ACCEL1G_ADR);
-    writeFloat(accelZero[XAXIS], LEVELPITCHCAL_ADR);
-    writeFloat(accelZero[YAXIS], LEVELROLLCAL_ADR);
-    writeFloat(accelZero[ZAXIS], LEVELZCAL_ADR);
   }
 };
 #endif
@@ -381,10 +290,12 @@ private:
 
 public:
   Accel_ArduCopter() : Accel(){
-    accelScaleFactor = G_2_MPS2((3.3/4096) / 0.330);    
   }
   
+/******************************************************/
+
   void initialize(void) {
+    this->_initialize();
     // old AQ way
     // rollChannel = 5
     // pitchChannel = 4
@@ -393,52 +304,20 @@ public:
     // rollChannel = 3
     // pitchChannel = 4
     // zAxisChannel = 5
-    this->_initialize(3, 4, 5);
-    smoothFactor     = readFloat(ACCSMOOTH_ADR);
+    accelChannel[XAXIS] = 3;
+    accelChannel[YAXIS] = 4;
+    accelChannel[ZAXIS] = 5;
   }
   
   void measure(void) {
-    for (byte axis = ROLL; axis < LASTAXIS; axis++) {
+    for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
       rawADC = analogRead_ArduCopter_ADC(accelChannel[axis]);
       if (rawADC > 500) { // Check if measurement good
-        if (axis == ROLL)
-          accelADC[axis] = rawADC - accelZero[axis];
-        else
-          accelADC[axis] = accelZero[axis] - rawADC;
+          accelADC[axis] = rawADC;
         //accelData[axis] = computeFirstOrder(accelADC[axis] * accelScaleFactor, &firstOrder[axis]);
-        accelData[axis] = filterSmooth(accelADC[axis] * accelScaleFactor, accelData[axis], smoothFactor);
+        accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
       }
     }
-  }
-
-  const int getFlightData(byte axis) {
-      return getRaw(axis);
-  }
-  
-  // Allows user to zero accelerometers on command
-  void calibrate(void) {
-    int findZero[FINDZERO];
-    
-    for(byte calAxis = XAXIS; calAxis < LASTAXIS; calAxis++) {
-      for (int i=0; i<FINDZERO; i++) {
-        findZero[i] = analogRead_ArduCopter_ADC(accelChannel[calAxis]);
-        delay(2);
-      }
-      accelZero[calAxis] = findMedian(findZero, FINDZERO);
-    }
-
-    //accelOneG = 486;    // tested value with the configurator at flat level
-    // replace with estimated Z axis 0g value
-    accelZero[ZAXIS] = (accelZero[ROLL] + accelZero[PITCH]) / 2;
-   
-    // store accel value that represents 1g
-    measure();
-    accelOneG = -accelData[ZAXIS];
-
-    writeFloat(accelOneG,        ACCEL1G_ADR);
-    writeFloat(accelZero[XAXIS], LEVELPITCHCAL_ADR);
-    writeFloat(accelZero[YAXIS], LEVELROLLCAL_ADR);
-    writeFloat(accelZero[ZAXIS], LEVELZCAL_ADR);
   }
 };
 #endif
@@ -450,61 +329,33 @@ public:
 class Accel_Wii : public Accel {
 public:
   Accel_Wii() : Accel(){
-    accelScaleFactor = 0.09165093;  // Experimentally derived to produce meters/s^2    
   }
   
+/******************************************************/
+
   void initialize(void) {
-    accelOneG        = readFloat(ACCEL1G_ADR);
-    accelZero[XAXIS] = readFloat(LEVELPITCHCAL_ADR);
-    accelZero[YAXIS] = readFloat(LEVELROLLCAL_ADR);
-    accelZero[ZAXIS] = readFloat(LEVELZCAL_ADR);
-    smoothFactor     = readFloat(ACCSMOOTH_ADR);
+    this->_initialize();
   }
   
+/******************************************************/
+
   void measure(void) {
     // Actual measurement performed in gyro class
     // We just update the appropriate variables here
-
+  
     // Original Wii sensor orientation
-    //accelADC[XAXIS] =  NWMP_acc[PITCH] - accelZero[PITCH];
-    //accelADC[YAXIS] = NWMP_acc[ROLL] - accelZero[ROLL];
-    //accelADC[ZAXIS] = accelZero[ZAXIS] - NWMP_acc[ZAXIS];
-
-    accelADC[XAXIS] =  NWMP_acc[XAXIS] - accelZero[XAXIS];  // Configured for Paris MultiWii Board
-    accelADC[YAXIS] =  accelZero[YAXIS] - NWMP_acc[YAXIS];  // Configured for Paris MultiWii Board
-    accelADC[ZAXIS] =  accelZero[ZAXIS] - NWMP_acc[ZAXIS];  // Configured for Paris MultiWii Board
+    //accelADC[XAXIS] = NWMP_acc[YAXIS];
+    //accelADC[YAXIS] = NWMP_acc[XAXIS];
+    //accelADC[ZAXIS] = NWMP_acc[ZAXIS];
+  
+    accelADC[XAXIS] =  NWMP_acc[XAXIS];  // Configured for Paris MultiWii Board
+    accelADC[YAXIS] =  NWMP_acc[YAXIS];  // Configured for Paris MultiWii Board
+    accelADC[ZAXIS] =  NWMP_acc[ZAXIS];  // Configured for Paris MultiWii Board
     
     for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
       //accelData[axis] = computeFirstOrder(accelADC[axis] * accelScaleFactor, &firstOrder[axis]);
-      accelData[axis] = filterSmooth(accelADC[axis] * accelScaleFactor, accelData[axis], smoothFactor);
+      accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
     }
-  }
-  
-  const int getFlightData(byte axis) {
-      return getRaw(axis);
-  }
- 
-  // Allows user to zero accelerometers on command
-  void calibrate(void) {
-    int findZero[FINDZERO];
-
-    for(byte calAxis = XAXIS; calAxis < LASTAXIS; calAxis++) {
-      for (byte i=0; i<FINDZERO; i++) {
-        updateControls();
-        findZero[i] = NWMP_acc[calAxis];
-      }
-      accelZero[calAxis] = findMedian(findZero, FINDZERO);
-    }
-    
-    // store accel value that represents 1g
-    accelOneG = -accelData[ZAXIS];
-    // replace with estimated Z axis 0g value
-    accelZero[ZAXIS] = (accelZero[XAXIS] + accelZero[YAXIS]) / 2;
-    
-    writeFloat(accelOneG, ACCEL1G_ADR);
-    writeFloat(accelZero[YAXIS], LEVELROLLCAL_ADR);
-    writeFloat(accelZero[XAXIS], LEVELPITCHCAL_ADR);
-    writeFloat(accelZero[ZAXIS], LEVELZCAL_ADR);
   }
 };
 #endif
@@ -529,7 +380,6 @@ public:
   }
 
   void measure(void) {
-    //currentTime = micros(); // AKA removed as a result of Honks original work, not needed further
       accelADC[XAXIS] = chr6dm.data.ax - accelZero[XAXIS];
       accelADC[YAXIS] = chr6dm.data.ay - accelZero[YAXIS];
       accelADC[ZAXIS] = chr6dm.data.az - accelOneG;

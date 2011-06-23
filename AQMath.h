@@ -110,6 +110,119 @@ void setupFilters(float oneG)
   firstOrder[AZ_LAG].lastOutput = -oneG;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//
+//
+////////////////////////////////////////////////////////////////////////////////
+struct fourthOrderData
+{
+  float b0, b1, b2, b3, b4;
+  float a1, a2, a3, a4;
+  float  inputTm1,  inputTm2,  inputTm3,  inputTm4;
+  float outputTm1, outputTm2, outputTm3, outputTm4;
+} fourthOrder[3];
+
+float computeFourthOrder(float currentInput, struct fourthOrderData *filterParameters)
+{
+  float output;
+  
+  output = filterParameters->b0 * currentInput + 
+           filterParameters->b1 * filterParameters->inputTm1 + 
+           filterParameters->b2 * filterParameters->inputTm2 +
+           filterParameters->b3 * filterParameters->inputTm3 +
+           filterParameters->b4 * filterParameters->inputTm4 -
+           filterParameters->a1 * filterParameters->outputTm1 -
+           filterParameters->a2 * filterParameters->outputTm2 -
+           filterParameters->a3 * filterParameters->outputTm3 -
+           filterParameters->a4 * filterParameters->outputTm4;
+
+  filterParameters->inputTm4 = filterParameters->inputTm3;
+  filterParameters->inputTm3 = filterParameters->inputTm2;
+  filterParameters->inputTm2 = filterParameters->inputTm1;
+  filterParameters->inputTm1 = currentInput;
+  
+  filterParameters->outputTm4 = filterParameters->outputTm3;
+  filterParameters->outputTm3 = filterParameters->outputTm2;
+  filterParameters->outputTm2 = filterParameters->outputTm1;
+  filterParameters->outputTm1 = output;
+    
+  return output;
+}
+
+#define AX_FILTER 0
+#define AY_FILTER 1
+#define AZ_FILTER 2
+
+float filteredAccel[3];
+
+void setupFourthOrder(void)
+{
+  // cheby2(4,40,25/50)
+  fourthOrder[AX_FILTER].b0 =  0.04581460;
+  fourthOrder[AX_FILTER].b1 =  0.07545934;
+  fourthOrder[AX_FILTER].b2 =  0.10240911;
+  fourthOrder[AX_FILTER].b3 =  0.07545934;
+  fourthOrder[AX_FILTER].b4 =  0.04581460;
+  
+  fourthOrder[AX_FILTER].a1 = -1.52326248;
+  fourthOrder[AX_FILTER].a2 =  1.25373905;
+  fourthOrder[AX_FILTER].a3 = -0.46024027;
+  fourthOrder[AX_FILTER].a4 =  0.07472070;
+  
+  fourthOrder[AX_FILTER].inputTm1 = 0.0;
+  fourthOrder[AX_FILTER].inputTm2 = 0.0;
+  fourthOrder[AX_FILTER].inputTm3 = 0.0;
+  fourthOrder[AX_FILTER].inputTm4 = 0.0;
+  
+  fourthOrder[AX_FILTER].outputTm1 = 0.0;
+  fourthOrder[AX_FILTER].outputTm2 = 0.0;
+  fourthOrder[AX_FILTER].outputTm3 = 0.0;
+  fourthOrder[AX_FILTER].outputTm4 = 0.0;
+  //////
+  fourthOrder[AY_FILTER].b0 =  0.04581460;
+  fourthOrder[AY_FILTER].b1 =  0.07545934;
+  fourthOrder[AY_FILTER].b2 =  0.10240911;
+  fourthOrder[AY_FILTER].b3 =  0.07545934;
+  fourthOrder[AY_FILTER].b4 =  0.04581460;
+  
+  fourthOrder[AY_FILTER].a1 = -1.52326248;
+  fourthOrder[AY_FILTER].a2 =  1.25373905;
+  fourthOrder[AY_FILTER].a3 = -0.46024027;
+  fourthOrder[AY_FILTER].a4 =  0.07472070;
+  
+  fourthOrder[AY_FILTER].inputTm1 = 0.0;
+  fourthOrder[AY_FILTER].inputTm2 = 0.0;
+  fourthOrder[AY_FILTER].inputTm3 = 0.0;
+  fourthOrder[AY_FILTER].inputTm4 = 0.0;
+  
+  fourthOrder[AY_FILTER].outputTm1 = 0.0;
+  fourthOrder[AY_FILTER].outputTm2 = 0.0;
+  fourthOrder[AY_FILTER].outputTm3 = 0.0;
+  fourthOrder[AY_FILTER].outputTm4 = 0.0;
+  ///////
+  fourthOrder[AZ_FILTER].b0 =  0.04581460;
+  fourthOrder[AZ_FILTER].b1 =  0.07545934;
+  fourthOrder[AZ_FILTER].b2 =  0.10240911;
+  fourthOrder[AZ_FILTER].b3 =  0.07545934;
+  fourthOrder[AZ_FILTER].b4 =  0.04581460;
+  
+  fourthOrder[AZ_FILTER].a1 = -1.52326248;
+  fourthOrder[AZ_FILTER].a2 =  1.25373905;
+  fourthOrder[AZ_FILTER].a3 = -0.46024027;
+  fourthOrder[AZ_FILTER].a4 =  0.07472070;
+  
+  fourthOrder[AZ_FILTER].inputTm1 = -9.8065;
+  fourthOrder[AZ_FILTER].inputTm2 = -9.8065;
+  fourthOrder[AZ_FILTER].inputTm3 = -9.8065;
+  fourthOrder[AZ_FILTER].inputTm4 = -9.8065;
+  
+  fourthOrder[AZ_FILTER].outputTm1 = -9.8065;
+  fourthOrder[AZ_FILTER].outputTm2 = -9.8065;
+  fourthOrder[AZ_FILTER].outputTm3 = -9.8065;
+  fourthOrder[AZ_FILTER].outputTm4 = -9.8065;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 
 // Low pass filter, kept as regular C function for speed
 float filterSmooth(float currentData, float previousData, float smoothFactor) {
@@ -118,6 +231,37 @@ float filterSmooth(float currentData, float previousData, float smoothFactor) {
   else
     return currentData; // if smoothFactor == 1.0, do not calculate, just bypass!
 }
+
+#define AVSIZE 32
+
+class MovingAverage	{
+  private:
+    byte aveCount;
+    float aveValues[AVSIZE];
+    
+  public:
+    MovingAverage(void) {
+      for (byte i=0; i < AVSIZE; i++) {
+        aveValues[i] = 0.0;
+      }
+      aveCount = 0;
+    }
+    
+    void setValue(float i) {
+      aveValues[aveCount++] = i;
+      aveCount &= AVSIZE - 1;		// housekeep the array counter to be from 0 - ARRAY_SIZE values
+    }
+     
+    float getAverage(void) {
+      float sumTotal = 0;
+      
+      for (byte i=0;i < AVSIZE; i++) {
+        sumTotal += aveValues[i];
+      }
+      
+      return (sumTotal / AVSIZE);
+    }
+};
 
 // ***********************************************************************
 // *********************** Median Filter Class ***************************

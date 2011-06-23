@@ -23,22 +23,89 @@
 //////////////////////////////////////////////////////////////////////////////
 /////////////////////////// calculateFlightError /////////////////////////////
 //////////////////////////////////////////////////////////////////////////////
+#define RATE_SCALING (2.5 * PWM2RAD)
 #define ATTITUDE_SCALING (0.75 * PWM2RAD)
+#define VELOCITY_SCALING (5.0 * PWM2MPS)
+
 void calculateFlightError(void)
 {
-  if (flightMode == ACRO) {
-    motors.setMotorAxisCommand(ROLL, updatePID(receiver.getSIData(ROLL), gyro.getData(ROLL), &PID[ROLL]));
-    motors.setMotorAxisCommand(PITCH, updatePID(receiver.getSIData(PITCH), -gyro.getData(PITCH), &PID[PITCH]));
-  }
-  else {
+  #ifdef HasGPS
+    float xPositionCmd;
+    float yPositionCmd;
+    float xVelocityCmd;
+    float yVelocityCmd;
+  #endif
+  float pitchAttitudeCmd;
+  float rollAttitudeCmd;
+  float rollMotorCmd;
+  float pitchMotorCmd;
+  float x,y;
+  byte priorState = 0;
+  
+  // determine stick position
+  int recRollStick = receiver.getStickPosition(ROLL);
+  int recPitchStick = receiver.getStickPosition(PITCH);
+  #ifdef HasGPS  
+    int recRollTrimStick = receiver.getTrimPosition(ROLL);
+    int recPitchTrimStick = receiver.getTrimPosition(PITCH);
+  #endif
     
-  float rollAttitudeCmd = updatePID((receiver.getData(ROLL) - receiver.getZero(ROLL)) * ATTITUDE_SCALING, flightAngle->getData(ROLL), &PID[LEVELROLL]);
-  float pitchAttitudeCmd = updatePID((receiver.getData(PITCH) - receiver.getZero(PITCH)) * ATTITUDE_SCALING, -flightAngle->getData(PITCH), &PID[LEVELPITCH]);
-  motors.setMotorAxisCommand(ROLL, updatePID(rollAttitudeCmd, gyro.getData(ROLL), &PID[LEVELGYROROLL]));
-  motors.setMotorAxisCommand(PITCH, updatePID(pitchAttitudeCmd, -gyro.getData(PITCH), &PID[LEVELGYROPITCH]));
-//  motors.setMotorAxisCommand(ROLL, updatePID(rollAttitudeCmd, flightAngle->getGyroUnbias(ROLL), &PID[LEVELGYROROLL]));
-//  motors.setMotorAxisCommand(PITCH, updatePID(pitchAttitudeCmd, -flightAngle->getGyroUnbias(PITCH), &PID[LEVELGYROPITCH]));
-
+  switch(flightMode) {
+    #ifdef HasGPS
+      case POSITION:
+        // when stick is in detent!
+        if ((recRollTrimStick > -25 && recRollTrimStick < 25) && (recPitchTrimStick > -25 && recPitchTrimStick < 25)) {
+          xPositionCmd = updatePID(0, flightAngle.getPositionOffset(PITCH), &PID[XPOSITION]);
+          yPositionCmd = updatePID(0, flightAngle.getPositionOffset(ROLL), &PID[YPOSITION]);
+          xPositionCmd = constrain(xPositionCmd, -3.0, 3.0);
+          yPositionCmd = constrain(yPositionCmd, -3.0, 3.0);
+        priorState = POSITION;
+        }
+      case VELOCITY:
+        if (priorState == POSITION) {
+          x = xPositionCmd;
+          y = yPositionCmd;
+        } else {
+          // latch new lat/lon for position hold
+          gps.capturePosition(&gps.holdPosition);
+          x = (float)recPitchStick * VELOCITY_SCALING;
+          y = (float)recRollStick * VELOCITY_SCALING;
+        }
+        xVelocityCmd = updatePID(x, gps.getAxisVelocity(XAXIS, flightAngle.getHeading(YAW) + radians(MAG_VAR)), &PID[XVELOCITY]);
+        yVelocityCmd = updatePID(y, gps.getAxisVelocity(YAXIS, flightAngle.getHeading(YAW) + radians(MAG_VAR)), &PID[YVELOCITY]);
+        priorState = VELOCITY;
+    #endif
+    case ATTITUDE:
+      if (priorState == VELOCITY) {
+        #ifdef HasGPS
+          x = xVelocityCmd;
+          y = yVelocityCmd;
+        #endif
+      } else {
+        x = (float)recPitchStick * ATTITUDE_SCALING;
+        y = (float)recRollStick * ATTITUDE_SCALING;
+      }
+      pitchAttitudeCmd = updatePID(x, -flightAngle.getData(PITCH), &PID[LEVELPITCH]);
+      rollAttitudeCmd = updatePID(y, flightAngle.getData(ROLL), &PID[LEVELROLL]);
+      priorState = ATTITUDE;
+    case RATE:
+    default:
+      if(priorState == ATTITUDE) {
+        rollMotorCmd = updatePID(rollAttitudeCmd, gyro.getData(ROLL), &PID[LEVELGYROROLL]);
+        pitchMotorCmd = updatePID(pitchAttitudeCmd, -gyro.getData(PITCH), &PID[LEVELGYROPITCH]);
+        // gyroUnbias
+        //rollMotorCmd = updatePID(rollAttitudeCmd, flightAngle.getGyroUnbias(ROLL), &PID[LEVELGYROROLL]);
+        //pitchMotorCmd = updatePID(pitchAttitudeCmd, -flightAngle.getGyroUnbias(PITCH), &PID[LEVELGYROPITCH])
+      } else {
+        rollMotorCmd = updatePID(recRollStick * RATE_SCALING, gyro.getData(ROLL), &PID[ROLL]);
+        pitchMotorCmd = updatePID(recPitchStick * RATE_SCALING, -gyro.getData(PITCH), &PID[PITCH]);
+        // gyroUnbias
+        //rollMotorCmd = updatePID(recRollStick * RATE_SCALING, flightAngle.getGyroUnbias(ROLL), &PID[ROLL]);
+        //pitchMotorCmd = updatePID(recPitchStick * RATE_SCALING, -flightAngle.getGyroUnbias(PITCH), &PID[PITCH]);
+      }
+      motors.setMotorAxisCommand(ROLL, rollMotorCmd);
+      motors.setMotorAxisCommand(PITCH, pitchMotorCmd);
+      break;
   }
 }
 
@@ -76,8 +143,12 @@ void processHeading(void)
 {
   if (headingHoldConfig == ON) {
 
-    #if defined(HeadingMagHold) || defined(AeroQuadMega_CHR6DM) || defined(APM_OP_CHR6DM)
-      heading = degrees(flightAngle->getHeading(YAW));
+    #if defined(HeadingMagHold)
+      #if defined(FlightAngleDCM) || defined(AeroQuadMega_CHR6DM) || defined(APM_OP_CHR6DM)
+        heading = degrees(flightAngle.getHeading(YAW));
+      #else
+        heading = degrees(gyro.getHeading());
+      #endif  
     #else
       heading = degrees(gyro.getHeading());
     #endif
@@ -98,14 +169,15 @@ void processHeading(void)
         setHeading = heading;
         headingHold = 0;
         PID[HEADING].integratedError = 0;
-        headingHoldState = OFF;
-        headingTime = currentTime;
+//        headingHoldState = OFF;
+//        headingTime = currentTime;
       }
       else {
         if (relativeHeading < .25 && relativeHeading > -.25) {
           headingHold = 0;
           PID[HEADING].integratedError = 0;
         }
+/*        
         else if (headingHoldState == OFF) { // quick fix to soften heading hold on new heading
           if ((currentTime - headingTime) > 500000) {
             headingHoldState = ON;
@@ -114,11 +186,12 @@ void processHeading(void)
             headingHold = 0;
           }
         }
+*/        
         else {
         // No new yaw input, calculate current heading vs. desired heading heading hold
         // Relative heading is always centered around zero
           headingHold = updatePID(0, relativeHeading, &PID[HEADING]);
-          headingTime = currentTime; // quick fix to soften heading hold, wait 100ms before applying heading hold
+//          headingTime = currentTime; // quick fix to soften heading hold, wait 100ms before applying heading hold
         }
       }
     }
@@ -129,11 +202,11 @@ void processHeading(void)
       PID[HEADING].integratedError = 0;
     }
   }
-  // NEW SI Version
-  commandedYaw = constrain(receiver.getSIData(YAW) + radians(headingHold), -PI, PI);
+  // 2.4 version
+  commandedYaw = constrain((receiver.getStickPosition(YAW) * RATE_SCALING) + radians(headingHold), -PI, PI);
   motors.setMotorAxisCommand(YAW, updatePID(commandedYaw, gyro.getData(YAW), &PID[YAW]));
   // uses flightAngle unbias rate
-  //motors.setMotorAxisCommand(YAW, updatePID(commandedYaw, flightAngle->getGyroUnbias(YAW), &PID[YAW]));
+  //motors.setMotorAxisCommand(YAW, updatePID(commandedYaw, flightAngle.getGyroUnbias(YAW), &PID[YAW]));
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -185,35 +258,35 @@ void processMinMaxMotorCommand(void)
   if ((motors.getMotorCommand(FRONT) <= MINTHROTTLE) || (motors.getMotorCommand(REAR) <= MINTHROTTLE)){
     delta = receiver.getData(THROTTLE) - MINTHROTTLE;
     motors.setMaxCommand(RIGHT, constrain(receiver.getData(THROTTLE) + delta, MINTHROTTLE, MAXCHECK));
-    motors.setMaxCommand(LEFT, constrain(receiver.getData(THROTTLE) + delta, MINTHROTTLE, MAXCHECK));
+    motors.setMaxCommand(LEFT,  constrain(receiver.getData(THROTTLE) + delta, MINTHROTTLE, MAXCHECK));
   }
   else if ((motors.getMotorCommand(FRONT) >= MAXCOMMAND) || (motors.getMotorCommand(REAR) >= MAXCOMMAND)) {
     delta = MAXCOMMAND - receiver.getData(THROTTLE);
     motors.setMinCommand(RIGHT, constrain(receiver.getData(THROTTLE) - delta, MINTHROTTLE, MAXCOMMAND));
-    motors.setMinCommand(LEFT, constrain(receiver.getData(THROTTLE) - delta, MINTHROTTLE, MAXCOMMAND));
+    motors.setMinCommand(LEFT,  constrain(receiver.getData(THROTTLE) - delta, MINTHROTTLE, MAXCOMMAND));
   }     
   else {
     motors.setMaxCommand(RIGHT, MAXCOMMAND);
-    motors.setMaxCommand(LEFT, MAXCOMMAND);
+    motors.setMaxCommand(LEFT,  MAXCOMMAND);
     motors.setMinCommand(RIGHT, MINTHROTTLE);
-    motors.setMinCommand(LEFT, MINTHROTTLE);
+    motors.setMinCommand(LEFT,  MINTHROTTLE);
   }
 
   if ((motors.getMotorCommand(LEFT) <= MINTHROTTLE) || (motors.getMotorCommand(RIGHT) <= MINTHROTTLE)){
-    delta = receiver.getData(THROTTLE) - MINTHROTTLE;
+    delta = receiver.getData(THROTTLE) - MINTHROTTLE; 
     motors.setMaxCommand(FRONT, constrain(receiver.getData(THROTTLE) + delta, MINTHROTTLE, MAXCHECK));
-    motors.setMaxCommand(REAR, constrain(receiver.getData(THROTTLE) + delta, MINTHROTTLE, MAXCHECK));
+    motors.setMaxCommand(REAR,  constrain(receiver.getData(THROTTLE) + delta, MINTHROTTLE, MAXCHECK));
   }
   else if ((motors.getMotorCommand(LEFT) >= MAXCOMMAND) || (motors.getMotorCommand(RIGHT) >= MAXCOMMAND)) {
     delta = MAXCOMMAND - receiver.getData(THROTTLE);
     motors.setMinCommand(FRONT, constrain(receiver.getData(THROTTLE) - delta, MINTHROTTLE, MAXCOMMAND));
-    motors.setMinCommand(REAR, constrain(receiver.getData(THROTTLE) - delta, MINTHROTTLE, MAXCOMMAND));
+    motors.setMinCommand(REAR,  constrain(receiver.getData(THROTTLE) - delta, MINTHROTTLE, MAXCOMMAND));
   }     
   else {
-    motors.setMaxCommand(FRONT, MAXCOMMAND);
-    motors.setMaxCommand(REAR, MAXCOMMAND);
+    motors.setMaxCommand(FRONT, MAXCOMMAND); 
+    motors.setMaxCommand(REAR,  MAXCOMMAND);
     motors.setMinCommand(FRONT, MINTHROTTLE);
-    motors.setMinCommand(REAR, MINTHROTTLE);
+    motors.setMinCommand(REAR,  MINTHROTTLE);
   }
 }
 
@@ -295,7 +368,7 @@ void processFlightControlXMode(void) {
   processMinMaxMotorCommand();
 
   // Allows quad to do acrobatics by lowering power to opposite motors during hard manuevers
-  if (flightMode == ACRO) {
+  if (flightMode == RATE) {
     processHardManuevers();
   }
 

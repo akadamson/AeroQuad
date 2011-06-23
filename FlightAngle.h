@@ -21,30 +21,33 @@
 // This class is responsible for calculating vehicle attitude
 class FlightAngle {
 public:
-  #define CF 0
-  #define KF 1
-  #define DCM 2
-  #define ARG 3
-  #define MARG 4
-  byte type;
+//  #define CF 0
+//  #define KF 1
+//  #define DCM 2
+//  #define ARG 3
+//  byte type;
   float angle[3];
-  float gyroAngle[2];
   float correctedRateVector[3];
   float earthAccel[3];
+  #ifdef HasGPS
+    float positionDistance[3];
+  #endif
   
   FlightAngle(void) {
-    for (byte axis = ROLL; axis < LASTAXIS; axis++)
+    for (byte axis = ROLL; axis < LASTAXIS; axis++) {
       angle[axis] = 0.0;
-    gyroAngle[ROLL] = 0;
-    gyroAngle[PITCH] = 0;
+      #ifdef HadGPS      
+        positionDistance[axis] = 0.0;
+      #endif
+    }
   }
   
-  virtual void initialize(float hdgX, float hdgY);
-  virtual void calculate(float rollRate,           float pitchRate,     float yawRate,       \
-                         float longitudinalAccel,  float lateralAccel,  float verticalAccel, \
-                         float oneG,               float magX,          float magY);
-  virtual float getGyroUnbias(byte axis);
-  virtual void calibrate();
+  #ifdef HasGPS
+    // returns the calculated offset in meters for a specitic axis
+    const float getPositionOffset(byte axis) {
+      return positionDistance[axis];
+    }
+  #endif
  
   // returns the angle of a specific axis in SI units (radians)
   const float getData(byte axis) {
@@ -55,6 +58,12 @@ public:
     return(angle[axis]);
   }
   
+  // return the bias corrected rate of a specific axis in radians
+  const float getGyroUnbias(byte axis) {
+    return correctedRateVector[axis];
+  }
+
+
   // This really needs to be in Radians to be consistent
   // I'll fix later - AKA
   // returns heading in degrees as 0-360
@@ -68,10 +77,10 @@ public:
       return (tDegrees);
   }
   
-  const byte getType(void) {
-    // This is set in each subclass to identify which algorithm used
-    return type;
-  }
+//  const byte getType(void) {
+//    // This is set in each subclass to identify which algorithm used
+//    return type;
+//  }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -184,13 +193,17 @@ void driftCorrection(float ax, float ay, float az, float oneG, float magX, float
                          accelVector[ZAXIS] * accelVector[ZAXIS])) / oneG;
                          
   // Weight for accelerometer info (<0.75G = 0.0, 1G = 1.0 , >1.25G = 0.0)
-  // accelWeight = constrain(1 - 4*abs(1 - accelMagnitude),0,1);
+  accelWeight = constrain(1 - 4*abs(1 - accelMagnitude),0,1);
   
   // Weight for accelerometer info (<0.5G = 0.0, 1G = 1.0 , >1.5G = 0.0)
-  accelWeight = constrain(1 - 2 * abs(1 - accelMagnitude), 0, 1);
+  //accelWeight = constrain(1 - 2 * abs(1 - accelMagnitude), 0, 1);
   
   vectorCrossProduct(&errorRollPitch[0], &accelVector[0], &dcmMatrix[6]);
+  
   vectorScale(3, &omegaP[0], &errorRollPitch[0], kpRollPitch * accelWeight);
+  
+  errorRollPitch[0] = constrain(errorRollPitch[0], -0.000029, 0.000029);
+  errorRollPitch[1] = constrain(errorRollPitch[1], -0.000029, 0.000029);
   
   vectorScale(3, &scaledOmegaI[0], &errorRollPitch[0], kiRollPitch * accelWeight);
   vectorAdd(3, omegaI, omegaI, scaledOmegaI);
@@ -199,10 +212,14 @@ void driftCorrection(float ax, float ay, float az, float oneG, float magX, float
   
   #ifdef HeadingMagHold
     errorCourse = (dcmMatrix[0] * magY) - (dcmMatrix[3] * magX);
+    
     vectorScale(3, errorYaw, &dcmMatrix[6], errorCourse);
   
     vectorScale(3, &scaledOmegaP[0], &errorYaw[0], kpYaw);
+    
     vectorAdd(3, omegaP, omegaP, scaledOmegaP);
+    
+    errorRollPitch[2] = constrain(errorRollPitch[2], -0.000029, 0.000029);
   
     vectorScale(3, &scaledOmegaI[0] ,&errorYaw[0], kiYaw);
     vectorAdd(3, omegaI, omegaI, scaledOmegaI);
@@ -253,6 +270,46 @@ void earthAxisAccels(float ax, float ay, float az, float oneG)
   earthAccel[YAXIS] = vectorDotProduct(3, &dcmMatrix[3], &accelVector[0]);
   earthAccel[ZAXIS] = vectorDotProduct(3, &dcmMatrix[6], &accelVector[0]) + oneG;
 } 
+
+#ifdef HasGPS
+  void calcXYPosition(void) {
+    float transMatrix[9];
+    float xDist, yDist;
+    
+    matrixTranspose3x3(transMatrix, dcmMatrix);
+    // this next line probabably needs to be moved to the gps.run routine and executed as some internval in the executive
+    gps.calculateXYDistance(gps.currentPosition, gps.holdPosition);
+    xDist = transMatrix[0] * gps.getAxisDistance(PITCH) + transMatrix[1] * gps.getAxisDistance(ROLL) + transMatrix[2] * 0;
+    yDist = transMatrix[3] * gps.getAxisDistance(PITCH) + transMatrix[4] * gps.getAxisDistance(ROLL) + transMatrix[5] * 0;
+    positionDistance[XAXIS] = xDist;
+    positionDistance[YAXIS] = yDist;
+    /*
+    if (gps.holdPosition.valid && gps.currentPosition.valid) {
+      for (byte axis = XAXIS; axis < ZAXIS; axis++) {
+        Serial.print(earthAccel[axis],6);
+        comma();
+      }
+      for (byte axis = ROLL; axis< YAW; axis++) {
+        Serial.print(accel.getData(axis),6);
+        comma();
+      }
+      for (byte axis = ROLL; axis < YAW; axis++) {
+        Serial.print(angle[axis],6);
+        comma();
+      }
+      for (byte axis = XAXIS; axis < ZAXIS; axis++) {
+        Serial.print(positionDistance[axis],6);
+        comma();
+      }
+      for (byte axis = XAXIS; axis < ZAXIS; axis++) {
+        Serial.print(gps.getAxisVelocity(axis, this->getHeading(YAW) + radians(MAG_VAR)),6);
+        comma();
+      }
+      Serial.println(gps.f_speed_mps(),6);
+    }
+    */
+  }
+#endif  
   
 public:
   FlightAngle_DCM():FlightAngle() {}
@@ -278,25 +335,11 @@ public:
     dcmMatrix[8] =  1;
 
     // Original from John
-//    kpRollPitch = 1.6;
-//    kiRollPitch = 0.005;
+    kpRollPitch = 1.6;
+    kiRollPitch = 0.005;
     
-//    kpYaw = -1.6;
-//    kiYaw = -0.005;
-
-/*    // released in 2.2
-    kpRollPitch = 1.0;
-    kiRollPitch = 0.002;
-*/
-
-    kpRollPitch = 0.1;        // alternate 0.05;
-    kiRollPitch = 0.0002;     // alternate 0.0001;
-
-    kpYaw = -1.0;
-    kiYaw = -0.002;
-
-//    kpYaw = -0.1;             // alternate -0.05;
-//    kiYaw = -0.0002;          // alternate -0.0001;
+    kpYaw = -1.6;
+    kiYaw = -0.005;
     
   }
   
@@ -307,224 +350,28 @@ public:
   void calculate(float rollRate,            float pitchRate,      float yawRate,  \
                  float longitudinalAccel,   float lateralAccel,   float verticalAccel, \
                  float oneG,                float magX,           float magY) {
-    
+  #ifdef BinaryWrite
+    if (armed == ON) {
+      printInt(21845); // Start word of 0x5555
+      sendBinaryuslong(currentTime);
+      sendBinaryFloat(longitudinalAccel);
+      sendBinaryFloat(lateralAccel);
+      sendBinaryFloat(verticalAccel);
+      printInt(32767); // Stop word of 0x7FFF
+    }
+  #endif 
+
     matrixUpdate(rollRate, pitchRate, yawRate); 
     normalize();
     driftCorrection(longitudinalAccel, lateralAccel, verticalAccel, oneG, magX, magY);
     eulerAngles();
     earthAxisAccels(longitudinalAccel, lateralAccel, verticalAccel, oneG);
+    #ifdef HasGPS
+     if (flightMode == POSITION)
+        if (gps.holdPosition.valid && gps.currentPosition.valid) 
+          calcXYPosition();
+    #endif    
   }
-  
-  float getGyroUnbias(byte axis) {
-    return correctedRateVector[axis];
-  }
-  
-  void calibrate() {};
-  
-};
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//=====================================================================================================
-// AHRS.c
-// S.O.H. Madgwick
-// 25th August 2010
-//=====================================================================================================
-// Description:
-//
-// Quaternion implementation of the 'DCM filter' [Mayhony et al].  Incorporates the magnetic distortion
-// compensation algorithms from my filter [Madgwick] which eliminates the need for a reference
-// direction of flux (bx bz) to be predefined and limits the effect of magnetic distortions to yaw
-// axis only.
-//
-// User must define 'halfT' as the (sample period / 2), and the filter gains 'Kp' and 'Ki'.
-//
-// Global variables 'q0', 'q1', 'q2', 'q3' are the quaternion elements representing the estimated
-// orientation.  See my report for an overview of the use of quaternions in this application.
-//
-// User must call 'AHRSupdate()' every sample period and parse calibrated gyroscope ('gx', 'gy', 'gz'),
-// accelerometer ('ax', 'ay', 'ay') and magnetometer ('mx', 'my', 'mz') data.  Gyroscope units are
-// radians/second, accelerometer and magnetometer units are irrelevant as the vector is normalised.
-//
-//=====================================================================================================
-
-////////////////////////////////////////////////////////////////////////////////
-// MARG - Magntometer, Accelerometer, Rate Gyro
-////////////////////////////////////////////////////////////////////////////////
-
-class FlightAngle_MARG : public FlightAngle {
-private:
-  float kpAcc;                // proportional gain governs rate of convergence to accelerometer
-  float kiAcc;                // integral gain governs rate of convergence of gyroscope biases
-  float kpMag;                // proportional gain governs rate of convergence to magnetometer
-  float kiMag;                // integral gain governs rate of convergence of gyroscope biases
-  float halfT;                // half the sample period
-  float q0, q1, q2, q3;       // quaternion elements representing the estimated orientation
-  float exInt, eyInt, ezInt;  // scaled integral error
-
-////////////////////////////////////////////////////////////////////////////////
-// margUpdate
-////////////////////////////////////////////////////////////////////////////////
-
-  void margUpdate(float gx, float gy, float gz, float ax, float ay, float az, float mx, float my, float mz) {
-    float norm;
-    float hx, hy, hz, bx, bz;
-    float vx, vy, vz, wx, wy, wz;
-    float q0i, q1i, q2i, q3i;
-    float exAcc, eyAcc, ezAcc;
-    float exMag, eyMag, ezMag;
-    
-    halfT = G_Dt/2;
-  
-    // auxiliary variables to reduce number of repeated operations
-    float q0q0 = q0*q0;
-    float q0q1 = q0*q1;
-    float q0q2 = q0*q2;
-    float q0q3 = q0*q3;
-    float q1q1 = q1*q1;
-    float q1q2 = q1*q2;
-    float q1q3 = q1*q3;
-    float q2q2 = q2*q2;   
-    float q2q3 = q2*q3;
-    float q3q3 = q3*q3;          
-    	
-    // normalise the measurements
-    norm = sqrt(ax*ax + ay*ay + az*az);       
-    ax = ax / norm;
-    ay = ay / norm;
-    az = az / norm;
-    norm = sqrt(mx*mx + my*my + mz*mz);          
-    mx = mx / norm;
-    my = my / norm;
-    mz = mz / norm;         
-    	
-    // compute reference direction of flux
-    hx = mx * 2*(0.5 - q2q2 - q3q3) + my * 2*(q1q2 - q0q3)       + mz * 2*(q1q3 + q0q2);
-    hy = mx * 2*(q1q2 + q0q3)       + my * 2*(0.5 - q1q1 - q3q3) + mz * 2*(q2q3 - q0q1);
-    hz = mx * 2*(q1q3 - q0q2)       + my * 2*(q2q3 + q0q1)       + mz * 2*(0.5 - q1q1 - q2q2);
-    
-    bx = sqrt((hx*hx) + (hy*hy));
-    bz = hz;        
-    	
-    // estimated direction of gravity and flux (v and w)
-    vx = 2*(q1q3 - q0q2);
-    vy = 2*(q0q1 + q2q3);
-    vz = q0q0 - q1q1 - q2q2 + q3q3;
-    
-    wx = bx * 2*(0.5 - q2q2 - q3q3) + bz * 2*(q1q3 - q0q2);
-    wy = bx * 2*(q1q2 - q0q3)       + bz * 2*(q0q1 + q2q3);
-    wz = bx * 2*(q0q2 + q1q3)       + bz * 2*(0.5 - q1q1 - q2q2);
-    	
-    // error is sum of cross product between reference direction of fields and direction measured by sensors
-    exAcc = (vy*az - vz*ay);
-    eyAcc = (vz*ax - vx*az);
-    ezAcc = (vx*ay - vy*ax);
-    
-    exMag = (my*wz - mz*wy);
-    eyMag = (mz*wx - mx*wz);
-    ezMag = (mx*wy - my*wx);
-    
-  //  ex = (ay*vz - az*vy) + (my*wz - mz*wy);
-  //  ey = (az*vx - ax*vz) + (mz*wx - mx*wz);
-  //  ez = (ax*vy - ay*vx) + (mx*wy - my*wx);
-    	
-    // integral error scaled integral gain
-    exInt = exInt + exAcc*kiAcc + exMag*kiMag;
-    eyInt = eyInt + eyAcc*kiAcc + eyMag*kiMag;
-    ezInt = ezInt + ezAcc*kiAcc + ezMag*kiMag;
-    	
-    // adjusted gyroscope measurements
-    gx = gx + exAcc*kpAcc + exMag*kpMag + exInt;
-    gy = gy + eyAcc*kpAcc + eyMag*kpMag + eyInt;
-    gz = gz + ezAcc*kpAcc + ezMag*kpMag + ezInt;
-    	
-    // integrate quaternion rate and normalise
-    q0i = (-q1*gx - q2*gy - q3*gz) * halfT;
-    q1i = ( q0*gx + q2*gz - q3*gy) * halfT;
-    q2i = ( q0*gy - q1*gz + q3*gx) * halfT;
-    q3i = ( q0*gz + q1*gy - q2*gx) * halfT;
-    q0 += q0i;
-    q1 += q1i;
-    q2 += q2i;
-    q3 += q3i;
-
-/*
-    // Original code found to hold a bug
-    // integrate quaternion rate and normalise
-    q0 = q0 + (-q1*gx - q2*gy - q3*gz) * halfT;
-    q1 = q1 + ( q0*gx + q2*gz - q3*gy) * halfT;
-    q2 = q2 + ( q0*gy - q1*gz + q3*gx) * halfT;
-    q3 = q3 + ( q0*gz + q1*gy - q2*gx) * halfT;  
-*/    
-    	
-    // normalise quaternion
-    norm = sqrt(q0*q0 + q1*q1 + q2*q2 + q3*q3);
-    q0 = q0 / norm;
-    q1 = q1 / norm;
-    q2 = q2 / norm;
-    q3 = q3 / norm;
-    
-    // save the adjusted gyroscope measurements
-    correctedRateVector[ROLL] = gx;
-    correctedRateVector[PITCH] = gy;
-    correctedRateVector[YAW] = gz;
-  }
-  
-  void eulerAngles(void)
-  {
-    angle[ROLL]  =  atan2(2 * (q0*q1 + q2*q3), 1 - 2 *(q1*q1 + q2*q2));
-    angle[PITCH] =   asin(2 * (q0*q2 - q1*q3));
-    angle[YAW]   =  atan2(2 * (q0*q3 + q1*q2), 1 - 2 *(q2*q2 + q3*q3));
-  }
-
-public:
-  FlightAngle_MARG():FlightAngle() {}
-  
-////////////////////////////////////////////////////////////////////////////////
-// Initialize MARG
-////////////////////////////////////////////////////////////////////////////////
-
-  void initialize(float hdgX, float hdgY) 
-  {
-    float hdg = atan2(hdgY, hdgX);
-    
-    q0 = cos(hdg/2);
-    q1 = 0;
-    q2 = 0;
-    q3 = sin(hdg/2);
-    exInt = 0.0;
-    eyInt = 0.0;
-    ezInt = 0.0;
-
-    kpAcc = 0.2;
-    kiAcc = 0.0005;
-    
-    kpMag = 2.0;
-    kiMag = 0.005;
-  }
-  
-////////////////////////////////////////////////////////////////////////////////
-// Calculate MARG
-////////////////////////////////////////////////////////////////////////////////
-
-  void calculate(float rollRate,          float pitchRate,    float yawRate,  \
-                 float longitudinalAccel, float lateralAccel, float verticalAccel, \
-                 float measuredMagX,      float measuredMagY, float measuredMagZ) {
-    
-    margUpdate(rollRate,          pitchRate,    yawRate, \
-               longitudinalAccel, lateralAccel, verticalAccel,  \
-               measuredMagX,      measuredMagY, measuredMagZ);
-    eulerAngles();
-  }
-  
-  float getGyroUnbias(byte axis) {
-    return correctedRateVector[axis];
-  }
-  
-  void calibrate() {}
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -662,8 +509,8 @@ public:
     eyInt = 0.0;
     ezInt = 0.0;
 
-    Kp = 0.2; // 2.0;
-    Ki = 0.0005; //0.005;
+    Kp = 2.0;
+    Ki = 0.005;
   }
   
 ////////////////////////////////////////////////////////////////////////////////
@@ -679,12 +526,6 @@ public:
               measuredMagX,      measuredMagY, measuredMagZ);
     eulerAngles();
   }
-  
-  float getGyroUnbias(byte axis) {
-    return correctedRateVector[axis];
-  }
-  
-  void calibrate() {}
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -722,11 +563,6 @@ public:
     zeroRoll = chr6dm.data.roll;
     zeroPitch = chr6dm.data.pitch;
   }
-  
-  float getGyroUnbias(byte axis) {
-    return gyro.getFlightData(axis);
-  }
-
 };
 #endif
 
@@ -763,11 +599,5 @@ public:
     zeroRoll = 0;
     zeroPitch = 0;
   }
-  
-  float getGyroUnbias(byte axis) {
-    return gyro.getFlightData(axis);
-  }
-
-  
 };
 #endif

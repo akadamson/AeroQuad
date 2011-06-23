@@ -150,17 +150,25 @@ void Init_Gyro_acc();
 void updateControls();
 
 void Init_Gyro_Acc(void) {
+// Init WM+ and NunChuk
 #ifdef AeroQuad_Paris_v3  
-   pinMode(12, OUTPUT);
-  digitalWrite(12, LOW);
+  pinMode(WiiPOWERPIN, OUTPUT);
+  digitalWrite(WiiPOWERPIN, LOW);
   delay(200);
-  digitalWrite(12, HIGH);
+  digitalWrite(WiiPOWERPIN, HIGH);
   delay(100);
 #endif  
-  //Init WM+ and Nunchuk
-  updateRegisterI2C(0x53, 0xF0, 0x55);
+  //Init WM+ and Nunchuk
+  // HJI updateRegisterI2C(0x53, 0xF0, 0x55);
+  twiMaster.start(0x53 | I2C_WRITE);  // HJI
+  twiMaster.write(0xF0);              // HJI
+  twiMaster.write(0x55);              // HJI
   delay(100);
-  updateRegisterI2C(0x53, 0xFE, 0x05);
+  // HJI updateRegisterI2C(0x53, 0xFE, 0x05);
+  twiMaster.start(0x53 | I2C_WRITE);  // HJI
+  twiMaster.write(0xFE);              // HJI
+  twiMaster.write(0x05);              // HJI
+  twiMaster.stop();                   // HJI
   delay(100);
 };
 
@@ -169,10 +177,16 @@ void updateControls() {
   unsigned char buffer[6];
 
   for(byte j=0;j<2;j++) {
-    sendByteI2C(0x52, 0x00);
-    Wire.requestFrom(0x52,6);
+    // HJI sendByteI2C(0x52, 0x00);
+    twiMaster.start(0x52 | I2C_WRITE);     // HJI
+    twiMaster.write(0x00);                 // HJI
+    // HJI Wire.requestFrom(0x52,6);
+    twiMaster.start(0x52 | I2C_READ);      // HJI
     for(byte i = 0; i < 6; i++) 
-      buffer[i] = Wire.receive();
+      // HJI buffer[i] = Wire.receive();
+      buffer[i] = twiMaster.read(i == 5);  // HJI
+    twiMaster.stop();                      // HJI
+
     if ((buffer[5] & 0x02) == 0x02 && (buffer[5]&0x01) == 0) { //If WiiMP
       NWMP_gyro[ROLL]  = (((buffer[5]>>2)<<8) +  buffer[2]);  // Configured for Paris MultiWii Board
       NWMP_gyro[PITCH] = (((buffer[4]>>2)<<8) +  buffer[1]);  // Configured for Paris MultiWii Board
@@ -214,4 +228,4 @@ void updateControls() {
 #endif
 
 
-
+

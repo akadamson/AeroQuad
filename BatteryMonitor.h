@@ -172,17 +172,12 @@ public:
   }
 };
 
+#if defined(AeroQuadMega_v2) || defined(AeroQuad_v18) || defined(AeroQuad_Mini) || defined(AeroQuadMega_Wii)
 // *******************************************************************************
 // ************************ AeroQuad Battery Monitor *****************************
 // *******************************************************************************
 class BatteryMonitor_AeroQuad : public BatteryMonitor {
 private:
-  #if defined (__AVR_ATmega328P__)
-    #define BUZZERPIN 12
-  #else
-    #define BUZZERPIN 49
-  #endif
-
   byte state, firstAlarm;
   float diode; // raw voltage goes through diode on Arduino
   float batteryScaleFactor;
@@ -202,8 +197,10 @@ public:
     diode = 0.9; // measured with DMM
 #endif    
     analogReference(DEFAULT);
-    pinMode(BUZZERPIN, OUTPUT); // connect a 12V buzzer to buzzer pin
-    digitalWrite(BUZZERPIN, LOW);
+//    #ifndef UseLED_Library
+//      pinMode(BUZZERPIN, OUTPUT); // connect a 12V buzzer to buzzer pin
+//      digitalWrite(BUZZERPIN, LOW);
+//    #endif
     previousBatteryTime = millis();
     state = LOW;
     firstAlarm = OFF;
@@ -212,30 +209,50 @@ public:
   void lowBatteryEvent(byte level) {
     long currentBatteryTime = millis() - previousBatteryTime;
     if (level == OK) {
-      digitalWrite(BUZZERPIN, LOW);
+      #ifdef UseLED_Library
+        buzzer.off();
+ //       statusLED.setOff();
+      #else
+        digitalWrite(BUZZERPIN, LOW);
+      #endif
       autoDescent = 0;
     }
     if (level == WARNING) {
-      //if ((autoDescent == 0) && (currentBatteryTime > 1000)) {
-      //  autoDescent = -50;
-      //}
+      if ((autoDescent == 0) && (currentBatteryTime > 1000)) {
+        autoDescent = -75;
+      }
       if (currentBatteryTime > 1100) {
-        //autoDescent = 50;
-        digitalWrite(LED3PIN, HIGH);
-        digitalWrite(BUZZERPIN, HIGH);
+        autoDescent = 75;
+        #ifdef UseLED_Library
+//          statusLED.setOn();
+          buzzer.on();
+        #else
+//          digitalWrite(LED3PIN, HIGH);
+          digitalWrite(BUZZERPIN, HIGH);
+        #endif
       }
       if (currentBatteryTime > 1200) {
         previousBatteryTime = millis();
-        //autoDescent = 0;
-        digitalWrite(LED3PIN, LOW);
-        digitalWrite(BUZZERPIN, LOW);
+        autoDescent = 0;
+        #ifdef UseLED_Library
+//          statusLED.setOff();
+          buzzer.off();
+        #else
+//          digitalWrite(LED3PIN, LOW);
+          digitalWrite(BUZZERPIN, LOW);
+        #endif
       }
     }
     if (level == ALARM) {
       if (firstAlarm == OFF) autoDescent = 0; // intialize autoDescent to zero if first time in ALARM state
       firstAlarm = ON;
-      digitalWrite(BUZZERPIN, HIGH); // enable buzzer
-      digitalWrite(LED3PIN, HIGH);
+      #ifdef UseLED_Library
+        buzzer.on();
+//        statusLED.setOn();
+      #else
+        digitalWrite(BUZZERPIN, HIGH); // enable buzzer
+//        digitalWrite(LED3PIN, HIGH);
+      #endif
       if ((currentBatteryTime > 500) && (throttle > 1400)) {
         autoDescent -= 1; // auto descend quad
         holdAltitude -= 0.2; // descend if in attitude hold mode
@@ -253,4 +270,4 @@ public:
     return (analogRead(channel) * batteryScaleFactor) + diode;
   }
 };
-
+#endif

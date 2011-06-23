@@ -26,9 +26,6 @@
 // Flight Software Version
 #define VERSION 2.4
 
-#define BAUD 115200
-//#define BAUD 111111 // use this to be compatible with USB and XBee connections
-//#define BAUD 57600
 #define LEDPIN 13
 #define ON 1
 #define OFF 0
@@ -44,18 +41,38 @@
   #define PIANO_SW1 42
   #define PIANO_SW2 43
 #endif
-#ifdef AeroQuadMega_v2  
-  #define LED2PIN 4
+#ifdef AeroQuadMega_v2
+  #ifdef AeroQuadSeeed_v2
+    #define LED2PIN 12
+  #else
+    #define LED2PIN 4
+  #endif
   #define LED3PIN 31
 #else
   #define LED2PIN 12
   #define LED3PIN 12
 #endif
+#if defined (__AVR_ATmega328P__)
+  #define BUZZERPIN 12
+#else
+  #ifdef AeroQuadSeeed_v2
+    #define BUZZERPIN 53
+  #else
+    #define BUZZERPIN 49
+  #endif
+#endif
+
+#ifdef AeroQuad_Paris_v3
+  #define WiiPOWERPIN 12
+#endif
 
 // Basic axis definitions
 #define ROLL 0
+#define ROLLRATE 0
 #define PITCH 1
+#define PITCHRATE 1
 #define YAW 2
+#define YAWRATE 2
 #define THROTTLE 3
 #define MODE 4
 #define AUX 5
@@ -66,13 +83,28 @@
 #define ZAXIS 2
 #define LASTAXIS 3
 #define LEVELROLL 3
+#define ROLLATTITUDE 3
 #define LEVELPITCH 4
+#define PITCHATTITUDE 4
 #define LASTLEVELAXIS 5
 #define HEADING 5
 #define LEVELGYROROLL 6
 #define LEVELGYROPITCH 7
 #define ALTITUDE 8
 #define ZDAMPENING 9
+#define XVELOCITY 10
+#define YVELOCITY 11
+#define XPOSITION 12
+#define YPOSITION 13
+
+#ifdef HasGPS
+// typedefs
+    typedef struct {
+      long lat;
+      long lon;
+      byte valid;
+    } GPSPosition;
+#endif
 
 // PID Variables
 struct PIDdata {
@@ -81,10 +113,14 @@ struct PIDdata {
   // AKA experiments with PID
   float previousPIDTime;
   bool firstPass;
-  bool typePID;
   float integratedError;
   float windupGuard; // Thinking about having individual wind up guards for each PID
+  byte pidID;
+#ifdef HasGPS
+} PID[14];
+#else
 } PID[10];
+#endif
 // This struct above declares the variable PID[] to hold each of the PID values for various functions
 // The following constants are declared in AeroQuad.h
 // ROLL = 0, PITCH = 1, YAW = 2 (used for Arcobatic Mode, gyros only)
@@ -94,15 +130,13 @@ struct PIDdata {
 // ZDAMPENING = 9 (used in altitude hold to dampen vertical accelerations)
 float windupGuard; // Read in from EEPROM
 
-// PID types
-#define NOTYPE 0
-#define TYPEPI 1
-
 // Smoothing filter parameters
 #define GYRO 0
 #define ACCEL 1
 #define FINDZERO 49
 float smoothHeading;
+
+#define ONE_G 9.8065F
 
 // Sensor pin assignments
 #define PITCHACCELPIN 0
@@ -143,12 +177,17 @@ float smoothHeading;
 float aref; // Read in from EEPROM
 
 // Flight Mode
-#define ACRO 0
-#define STABLE 1
+//#define ACRO 0
+#define RATE 0
+//#define STABLE 1
+#define ATTITUDE 1
+#define VELOCITY 2
+#define POSITION 3
 byte flightMode;
 unsigned long frameCounter = 0; // main loop executive frame counter
 int minAcro; // Read in from EEPROM, defines min throttle during flips
 #define PWM2RAD 0.002 //  Based upon 5RAD for full stick movement, you take this times the RAD to get the PWM conversion factor
+#define PWM2MPS 0.002 //  Based upon 5MPS for full stick movement, you take this times the MPS to get the PWM conversion factor
 
 // Auto level setup
 //float levelAdjust[2] = {0.0,0.0};
@@ -172,7 +211,7 @@ float headingHold = 0; // calculated adjustment for quad to go to heading (PID o
 float heading = 0; // measured heading from yaw gyro (process variable)
 float relativeHeading = 0; // current heading the quad is set to (set point)
 #if defined(AeroQuadMega_CHR6DM) || defined(APM_OP_CHR6DM)
-float absoluteHeading = 0;;
+  float absoluteHeading = 0;
 #endif
 float setHeading = 0;
 unsigned long headingTime = micros();
@@ -259,16 +298,20 @@ unsigned long tenHZpreviousTime;
 unsigned long twentyFiveHZpreviousTime;
 unsigned long fiftyHZpreviousTime;
 unsigned long hundredHZpreviousTime;
+#ifdef Loop_200HZ
+unsigned long hundredHZ1previousTime;
+#endif
+unsigned long twoHundredHZpreviousTime;
 // old times.
 //unsigned long receiverTime = 0;
 //unsigned long compassTime = 5000;
 //unsigned long altitudeTime = 10000;
 //unsigned long batteryTime = 15000;
 //unsigned long autoZeroGyroTime = 0;
-#ifdef CameraControl
-unsigned long cameraTime = 10000;
-#endif
-unsigned long fastTelemetryTime = 0;
+//#ifdef CameraControl
+//unsigned long cameraTime = 10000;
+//#endif
+//unsigned long fastTelemetryTime = 0;
 //unsigned long telemetryTime = 50000; // make telemetry output 50ms offset from receiver check
 
 // jihlein: wireless telemetry defines
@@ -281,7 +324,7 @@ unsigned long fastTelemetryTime = 0;
                                   defined(ArduCopter)          || \
                                   defined(AeroQuadMega_CHR6DM) || \
                                   defined(APM_OP_CHR6DM))
-  #define SERIAL_BAUD       115200
+  #define SERIAL_BAUD       111111
   #define SERIAL_PRINT      Serial3.print
   #define SERIAL_PRINTLN    Serial3.println
   #define SERIAL_AVAILABLE  Serial3.available
@@ -303,21 +346,26 @@ unsigned long fastTelemetryTime = 0;
 /**************************************************************/
 // Enable/disable control loops for debug
 //#define DEBUG
-byte receiverLoop = ON;
-byte telemetryLoop = ON;
-byte sensorLoop = ON;
-byte controlLoop = ON;
-#ifdef CameraControl
-byte cameraLoop = ON; // Note: stabilization camera software is still under development, moved to Arduino Mega
+//byte receiverLoop = ON;
+//byte telemetryLoop = ON;
+//byte sensorLoop = ON;
+//byte controlLoop = ON;
+//#ifdef CameraControl
+//byte cameraLoop = ON; // Note: stabilization camera software is still under development, moved to Arduino Mega
+//#endif
+#ifdef OpenlogBinaryWrite
+  byte fastTransfer = ON; // Used for troubleshooting
+#else
+  byte fastTransfer = OFF;
 #endif
-byte fastTransfer = OFF; // Used for troubleshooting
-byte testSignal = LOW;
+#ifdef DEBUG_LOOP
+  byte testSignal = LOW;
+#endif  
 
 // **************************************************************
 // *************************** EEPROM ***************************
 // **************************************************************
 // EEPROM storage addresses
-
 
 typedef struct {
   float p;
@@ -327,49 +375,19 @@ typedef struct {
 
 typedef struct {
     
-  t_NVR_PID ROLL_PID_GAIN_ADR;
-  t_NVR_PID LEVELROLL_PID_GAIN_ADR;
-  t_NVR_PID YAW_PID_GAIN_ADR;
-  t_NVR_PID PITCH_PID_GAIN_ADR;
-  t_NVR_PID LEVELPITCH_PID_GAIN_ADR;
-  t_NVR_PID HEADING_PID_GAIN_ADR;
-  t_NVR_PID LEVEL_GYRO_ROLL_PID_GAIN_ADR;
-  t_NVR_PID LEVEL_GYRO_PITCH_PID_GAIN_ADR;
-  t_NVR_PID ALTITUDE_PID_GAIN_ADR;
-  t_NVR_PID ZDAMP_PID_GAIN_ADR;
-  
-  float WINDUPGUARD_ADR;
-  float XMITFACTOR_ADR;
-  float GYROSMOOTH_ADR;
+  float XAXIS_ACCEL_BIAS_ADR;
+  float XAXIS_ACCEL_SCALE_FACTOR_ADR;
+  float YAXIS_ACCEL_BIAS_ADR;
+  float YAXIS_ACCEL_SCALE_FACTOR_ADR;
+  float ZAXIS_ACCEL_BIAS_ADR;
+  float ZAXIS_ACCEL_SCALE_FACTOR_ADR;
   float ACCSMOOTH_ADR;
-  float LEVELPITCHCAL_ADR;
-  float LEVELROLLCAL_ADR;
-  float LEVELZCAL_ADR;
-  float FILTERTERM_ADR;
-  float HEADINGSMOOTH_ADR;
-  float AREF_ADR;
-  float FLIGHTMODE_ADR;
-  float HEADINGHOLD_ADR;
-  float MINACRO_ADR;
-  float ACCEL1G_ADR;
-//  float ALTITUDE_PGAIN_ADR;
-  float ALTITUDE_MAX_THROTTLE_ADR;
-  float ALTITUDE_MIN_THROTTLE_ADR;
-  float ALTITUDE_SMOOTH_ADR;
-//  float ZDAMP_PGAIN_ADR;
-  float ALTITUDE_WINDUP_ADR;
-  float MAGXMAX_ADR;
-  float MAGXMIN_ADR;
-  float MAGYMAX_ADR;
-  float MAGYMIN_ADR;
-  float MAGZMAX_ADR;
-  float MAGZMIN_ADR;
-  float SERVOMINPITCH_ADR;
-  float SERVOMINROLL_ADR;
+  
   float GYRO_ROLL_ZERO_ADR;
   float GYRO_PITCH_ZERO_ADR;
   float GYRO_YAW_ZERO_ADR;
-
+  float GYROSMOOTH_ADR;
+  
   float RECEIVER_CHANNEL_0_SLOPE_ADR;
   float RECEIVER_CHANNEL_0_OFFSET_ADR;
   float RECEIVER_CHANNEL_0_SMOOTH_FACTOR_ADR;
@@ -388,6 +406,45 @@ typedef struct {
   float RECEIVER_CHANNEL_5_SLOPE_ADR;
   float RECEIVER_CHANNEL_5_OFFSET_ADR;
   float RECEIVER_CHANNEL_5_SMOOTH_FACTOR_ADR;
+
+  t_NVR_PID ROLL_PID_GAIN_ADR;
+  t_NVR_PID LEVELROLL_PID_GAIN_ADR;
+  t_NVR_PID YAW_PID_GAIN_ADR;
+  t_NVR_PID PITCH_PID_GAIN_ADR;
+  t_NVR_PID LEVELPITCH_PID_GAIN_ADR;
+  t_NVR_PID HEADING_PID_GAIN_ADR;
+  t_NVR_PID LEVEL_GYRO_ROLL_PID_GAIN_ADR;
+  t_NVR_PID LEVEL_GYRO_PITCH_PID_GAIN_ADR;
+  t_NVR_PID ALTITUDE_PID_GAIN_ADR;
+  t_NVR_PID ZDAMP_PID_GAIN_ADR;
+  
+  float WINDUPGUARD_ADR;
+  float XMITFACTOR_ADR;
+  // HJI float LEVELPITCHCAL_ADR;
+  // HJI float LEVELROLLCAL_ADR;
+  // HJI float LEVELZCAL_ADR;
+  float FILTERTERM_ADR;
+  float HEADINGSMOOTH_ADR;
+  float AREF_ADR;
+  float FLIGHTMODE_ADR;
+  float HEADINGHOLD_ADR;
+  float MINACRO_ADR;
+  // HJI float ACCEL1G_ADR;
+  //float ALTITUDE_PGAIN_ADR;
+  float ALTITUDE_MAX_THROTTLE_ADR;
+  float ALTITUDE_MIN_THROTTLE_ADR;
+  float ALTITUDE_SMOOTH_ADR;
+  //float ZDAMP_PGAIN_ADR;
+  float ALTITUDE_WINDUP_ADR;
+  float MAGXMAX_ADR;
+  float MAGXMIN_ADR;
+  float MAGYMAX_ADR;
+  float MAGYMIN_ADR;
+  float MAGZMAX_ADR;
+  float MAGZMIN_ADR;
+  float SERVOMINPITCH_ADR;
+  float SERVOMINROLL_ADR;
+
 } t_NVR_Data;  
 
 float nvrReadFloat(int address); // defined in DataStorage.h
@@ -401,7 +458,6 @@ void nvrWritePID(unsigned char IDPid, unsigned int IDEeprom);
 #define writeFloat(value, addr) nvrWriteFloat(value, GET_NVR_OFFSET(addr))
 #define readPID(IDPid, addr) nvrReadPID(IDPid, GET_NVR_OFFSET(addr))
 #define writePID(IDPid, addr) nvrWritePID(IDPid, GET_NVR_OFFSET(addr))
-
 
 // external dunction defined
 float arctan2(float y, float x); // defined in AQMath.h
