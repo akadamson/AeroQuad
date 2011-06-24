@@ -114,10 +114,19 @@ void setupFilters(float oneG)
 //
 //
 ////////////////////////////////////////////////////////////////////////////////
+// cheby2(4,60,12.5/50)
+#define B0  0.001893594048567
+#define B1 -0.002220262954039
+#define B2  0.003389066536478
+#define B3 -0.002220262954039
+#define B4  0.001893594048567
+#define A1 -3.362256889209355
+#define A2  4.282608240117919
+#define A3 -2.444765517272841
+#define A4  0.527149895089809
+
 struct fourthOrderData
 {
-  float b0, b1, b2, b3, b4;
-  float a1, a2, a3, a4;
   float  inputTm1,  inputTm2,  inputTm3,  inputTm4;
   float outputTm1, outputTm2, outputTm3, outputTm4;
 } fourthOrder[3];
@@ -126,15 +135,15 @@ float computeFourthOrder(float currentInput, struct fourthOrderData *filterParam
 {
   float output;
   
-  output = filterParameters->b0 * currentInput + 
-           filterParameters->b1 * filterParameters->inputTm1 + 
-           filterParameters->b2 * filterParameters->inputTm2 +
-           filterParameters->b3 * filterParameters->inputTm3 +
-           filterParameters->b4 * filterParameters->inputTm4 -
-           filterParameters->a1 * filterParameters->outputTm1 -
-           filterParameters->a2 * filterParameters->outputTm2 -
-           filterParameters->a3 * filterParameters->outputTm3 -
-           filterParameters->a4 * filterParameters->outputTm4;
+  output = B0 * currentInput                + 
+           B1 * filterParameters->inputTm1  + 
+           B2 * filterParameters->inputTm2  +
+           B3 * filterParameters->inputTm3  +
+           B4 * filterParameters->inputTm4  -
+           A1 * filterParameters->outputTm1 -
+           A2 * filterParameters->outputTm2 -
+           A3 * filterParameters->outputTm3 -
+           A4 * filterParameters->outputTm4;
 
   filterParameters->inputTm4 = filterParameters->inputTm3;
   filterParameters->inputTm3 = filterParameters->inputTm2;
@@ -157,18 +166,6 @@ float filteredAccel[3];
 
 void setupFourthOrder(void)
 {
-  // cheby2(4,40,25/50)
-  fourthOrder[AX_FILTER].b0 =  0.04581460;
-  fourthOrder[AX_FILTER].b1 =  0.07545934;
-  fourthOrder[AX_FILTER].b2 =  0.10240911;
-  fourthOrder[AX_FILTER].b3 =  0.07545934;
-  fourthOrder[AX_FILTER].b4 =  0.04581460;
-  
-  fourthOrder[AX_FILTER].a1 = -1.52326248;
-  fourthOrder[AX_FILTER].a2 =  1.25373905;
-  fourthOrder[AX_FILTER].a3 = -0.46024027;
-  fourthOrder[AX_FILTER].a4 =  0.07472070;
-  
   fourthOrder[AX_FILTER].inputTm1 = 0.0;
   fourthOrder[AX_FILTER].inputTm2 = 0.0;
   fourthOrder[AX_FILTER].inputTm3 = 0.0;
@@ -178,17 +175,8 @@ void setupFourthOrder(void)
   fourthOrder[AX_FILTER].outputTm2 = 0.0;
   fourthOrder[AX_FILTER].outputTm3 = 0.0;
   fourthOrder[AX_FILTER].outputTm4 = 0.0;
-  //////
-  fourthOrder[AY_FILTER].b0 =  0.04581460;
-  fourthOrder[AY_FILTER].b1 =  0.07545934;
-  fourthOrder[AY_FILTER].b2 =  0.10240911;
-  fourthOrder[AY_FILTER].b3 =  0.07545934;
-  fourthOrder[AY_FILTER].b4 =  0.04581460;
   
-  fourthOrder[AY_FILTER].a1 = -1.52326248;
-  fourthOrder[AY_FILTER].a2 =  1.25373905;
-  fourthOrder[AY_FILTER].a3 = -0.46024027;
-  fourthOrder[AY_FILTER].a4 =  0.07472070;
+  //////////
   
   fourthOrder[AY_FILTER].inputTm1 = 0.0;
   fourthOrder[AY_FILTER].inputTm2 = 0.0;
@@ -199,17 +187,8 @@ void setupFourthOrder(void)
   fourthOrder[AY_FILTER].outputTm2 = 0.0;
   fourthOrder[AY_FILTER].outputTm3 = 0.0;
   fourthOrder[AY_FILTER].outputTm4 = 0.0;
-  ///////
-  fourthOrder[AZ_FILTER].b0 =  0.04581460;
-  fourthOrder[AZ_FILTER].b1 =  0.07545934;
-  fourthOrder[AZ_FILTER].b2 =  0.10240911;
-  fourthOrder[AZ_FILTER].b3 =  0.07545934;
-  fourthOrder[AZ_FILTER].b4 =  0.04581460;
   
-  fourthOrder[AZ_FILTER].a1 = -1.52326248;
-  fourthOrder[AZ_FILTER].a2 =  1.25373905;
-  fourthOrder[AZ_FILTER].a3 = -0.46024027;
-  fourthOrder[AZ_FILTER].a4 =  0.07472070;
+  //////////
   
   fourthOrder[AZ_FILTER].inputTm1 = -9.8065;
   fourthOrder[AZ_FILTER].inputTm2 = -9.8065;

@@ -58,7 +58,9 @@
 // Warning:  If you enable HeadingHold or AltitudeHold and do not have the correct sensors connected, the flight software may hang
 // *******************************************************************************************************************************
 //#define HeadingMagHold // Enables HMC5843 Magnetometer, gets automatically selected if CHR6DM is defined
-//#define AltitudeHold // Enables BMP085 Barometer (experimental, use at your own risk)
+//#define AltitudeHold // Enables Altitude Hold (experimental, use at your own risk) - requires one of the following to be defined
+//#define BMP_085 // Enable the BMP085 Baro
+//#define MPX_Baro // Enalbe the MPX series Baros with Honks board
 #define BattMonitor //define your personal specs in BatteryMonitor.h! Full documentation with schematic there
 //#define HasGPS // define for GPS
 // MUST DEFINE with GPS - unique to your location W = negative value, E = positive value
@@ -71,15 +73,15 @@
 // if you only want DCM, then don't define either of the below
 // flightAngle recommendations: use FlightAngleARG if you do not have a magnetometer, use DCM if you have a magnetometer installed
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
-#define FlightAngleDCM // Use this if you have a magnetometer installed
-//#define FlightAngleARG // Use this if you do not have a magnetometer installed
+//#define FlightAngleDCM // Use this if you have a magnetometer installed
+#define FlightAngleARG // Use this if you do not have a magnetometer installed
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
 // Misc defines
 #define ConfiguratorTelem // Enables telemetry interface on Serial for Configurator
 //#define WirelessTelemetry  // Enables Wireless telemetry on Serial3  // Wireless telemetry enable
-#define BinaryWrite // Enables fast binary transfer of flight data to Configurator
+//#define BinaryWrite // Enables fast binary transfer of flight data to Configurator
 //#define BinaryWritePID // Enables fast binary transfer of attitude PID data
-#define OpenlogBinaryWrite // Enables fast binary transfer to serial2 and openlog hardware
+//#define OpenlogBinaryWrite // Enables fast binary transfer to serial2 and openlog hardware
 #define Loop_200HZ // Enable 200Hz timing loop to double sample Accel/Gyro, consume once
 //#define Loop_1HZ // Enable 1Hz timing loop
 #define AKA_MODS // various modifications from AKA
@@ -104,6 +106,10 @@
 // Debugging defines
 //#define DEBUG_LOOP
 //#define DEBUG_GPS
+
+#ifdef DEBUG_GPS
+#define Loop_1HZ
+#endif
 
 #if !defined(AeroQuadMega_v2)// || !defined(AeroQuad_v18) || !defined(AeroQuad_Mini)
   #if !defined(AeroQuad_v18)
@@ -203,7 +209,12 @@ TwiMaster twiMaster;
   #endif
   #ifdef AltitudeHold
     #include "Altitude.h"
+    #ifdef MPX_Baro
+    Altitude_MPX_SCC altitude;
+    #endif
+    #ifdef BMP_085
     Altitude_AeroQuad_v2 altitude;
+    #endif
   #endif
   #ifdef BattMonitor
     #include "BatteryMonitor.h"
@@ -305,7 +316,12 @@ TwiMaster twiMaster;
   #endif
   #ifdef AltitudeHold
     #include "Altitude.h"
+    #ifdef MPX_Baro
+    Altitude_MPX_SCC altitude;
+    #endif
+    #ifdef BMP_085
     Altitude_AeroQuad_v2 altitude;
+    #endif
   #endif
   #ifdef BattMonitor
     #include "BatteryMonitor.h"
@@ -645,7 +661,7 @@ void setup() {
   // AKA use a new low pass filter called a Lag Filter uncomment only if using DCM LAG filters
   //  setupFilters(accel.accelOneG);
   setupFourthOrder();
-  
+
   #ifdef HasGPS  
     gps.initialize();
   #endif
@@ -767,9 +783,10 @@ void loop () {
 //        digitalWrite(11, HIGH);
 //      #endif
       
-        filteredAccel[XAXIS] = computeFourthOrder(accel.getData(XAXIS), &fourthOrder[XAXIS]);
-        filteredAccel[YAXIS] = computeFourthOrder(accel.getData(YAXIS), &fourthOrder[YAXIS]);
-        filteredAccel[ZAXIS] = computeFourthOrder(accel.getData(ZAXIS), &fourthOrder[ZAXIS]);
+      // AKA - need to move these inside the accel measure method at some point  
+      filteredAccel[XAXIS] = computeFourthOrder(accel.getData(XAXIS), &fourthOrder[AX_FILTER]);
+      filteredAccel[YAXIS] = computeFourthOrder(accel.getData(YAXIS), &fourthOrder[AY_FILTER]);
+      filteredAccel[ZAXIS] = computeFourthOrder(accel.getData(ZAXIS), &fourthOrder[AZ_FILTER]);
         
 //      #ifdef DEBUG_LOOP
 //        digitalWrite(11, LOW);
@@ -779,57 +796,69 @@ void loop () {
       #if defined HeadingMagHold && defined FlightAngleARG
         // ARG with compass (not used by AHRS)
         flightAngle.calculate(gyro.getData(ROLL),                       \
-                               gyro.getData(PITCH),                      \
-                               gyro.getData(YAW),                        \
-                               accel.getData(XAXIS),                     \
-                               accel.getData(YAXIS),                     \
-                               accel.getData(ZAXIS),                     \
-                               0.0F,                                      \
-                               0.0F,                                      \
+                               gyro.getData(PITCH),                     \
+                               gyro.getData(YAW),                       \
+                               filteredAccel[XAXIS],                    \
+                               filteredAccel[YAXIS],                    \
+                               filteredAccel[ZAXIS],                    \
+//                               accel.getData(XAXIS),
+//                               accel.getData(YAXIS),
+//                               accel.getData(ZAXIS),
+                               0.0F,                                    \
+                               0.0F,                                    \
                                0.0F);
       #endif
 
       #if !defined HeadingMagHold && defined FlightAngleARG
         // ARG with no compass
         flightAngle.calculate(gyro.getData(ROLL),                       \
-                               gyro.getData(PITCH),                      \
-                               gyro.getData(YAW),                        \
-                               accel.getData(XAXIS),                     \
-                               accel.getData(YAXIS),                     \
-                               accel.getData(ZAXIS),                     \
-                               0.0F,                                      \
-                               0.0F,                                      \
+                               gyro.getData(PITCH),                     \
+                               gyro.getData(YAW),                       \
+                               filteredAccel[XAXIS],                    \
+                               filteredAccel[YAXIS],                    \
+                               filteredAccel[ZAXIS],                    \
+//                               accel.getData(XAXIS),
+//                               accel.getData(YAXIS),
+//                               accel.getData(ZAXIS),
+                               0.0F,                                    \
+                               0.0F,                                    \
                                0.0F);
       #endif
     
       #if defined HeadingMagHold && defined FlightAngleDCM
         // DCM with compass
         flightAngle.calculate(gyro.getData(ROLL),                       \
-                               gyro.getData(PITCH),                      \
-                               gyro.getData(YAW),                        \
-                               accel.getData(XAXIS),                     \
-                               accel.getData(YAXIS),                     \
-                               accel.getData(ZAXIS),                     \
-                               ONE_G,                                    \
-                               compass.getHdgXY(XAXIS),                  \
+                               gyro.getData(PITCH),                     \
+                               gyro.getData(YAW),                       \
+                               filteredAccel[XAXIS],                    \
+                               filteredAccel[YAXIS],                    \
+                               filteredAccel[ZAXIS],                    \
+//                               accel.getData(XAXIS),
+//                               accel.getData(YAXIS),
+//                               accel.getData(ZAXIS),
+                               ONE_G,                                   \
+                               compass.getHdgXY(XAXIS),                 \
                                compass.getHdgXY(YAXIS));
       #endif
       
       #if !defined HeadingMagHold && defined FlightAngleDCM
         // DCM with no compass
-        flightAngle.calculate(gyro.getData(ROLL),      \
-                              gyro.getData(PITCH),      \
-                              gyro.getData(YAW),        \
-//                              accel.getData(XAXIS),    
-//                              accel.getData(YAXIS),    
-//                              accel.getData(ZAXIS),    
-                              filteredAccel[XAXIS],      \
-                              filteredAccel[YAXIS],      \
-                              filteredAccel[ZAXIS],      \
-                              ONE_G,                      \
-                              0.0F,                       \
-                              0.0F);
+        flightAngle.calculate(gyro.getData(ROLL),                       \
+                              gyro.getData(PITCH),                      \
+                              gyro.getData(YAW),                        \
+                               filteredAccel[XAXIS],                    \
+                               filteredAccel[YAXIS],                    \
+                               filteredAccel[ZAXIS],                    \
+//                               accel.getData(XAXIS),
+//                               accel.getData(YAXIS),
+//                               accel.getData(ZAXIS),
+                               ONE_G,                                   \
+                               0.0F,                                    \
+                               0.0F);
       #endif
+
+      // AKA added for testing      
+//      fastTelemetry();
       
       #ifndef Loop_200HZ
         processFlightControl();
@@ -864,7 +893,7 @@ void loop () {
         camera.setYaw(degrees(flightAngle.getData(YAW)));
         camera.move();
       #endif 
-
+      
       #ifdef DEBUG_LOOP
         digitalWrite(10, LOW);
       #endif
@@ -884,10 +913,6 @@ void loop () {
       
       G_Dt = (currentTime - twentyFiveHZpreviousTime) / 1000000.0;
       twentyFiveHZpreviousTime = currentTime;
-      
-      #if defined(AltitudeHold)
-        altitude.measure(); // defined in altitude.h
-      #endif
       
       #ifdef HasGPS
         gps.run();
@@ -926,6 +951,10 @@ void loop () {
         batteryMonitor.measure(armed);
       #endif
       
+      #if defined(AltitudeHold)
+        altitude.measure(); // defined in altitude.h
+      #endif
+
       #ifdef ConfiguratorTelem
         // Listen for configuration commands and reports telemetry
         readSerialCommand(); // defined in SerialCom.pde

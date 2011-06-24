@@ -319,7 +319,7 @@ void sendSerialTelemetry() {
       PrintValueComma(gyro.getData(axis));
     }
     for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
-      PrintValueComma(accel.getData(axis));
+      PrintValueComma(filteredAccel[axis]);
     }
     for (byte axis = ROLL; axis < YAW; axis++) {
       //PrintValueComma(levelAdjust[axis]);
@@ -611,8 +611,9 @@ void fastTelemetry(void)
       printInt(21845); // Start word of 0x5555
       sendBinaryuslong(currentTime);
 //      printInt((int)flightMode);
-//      for (byte axis = ROLL; axis < LASTAXIS; axis++) sendBinaryFloat(gyro.getData(axis));
-      for (byte axis = XAXIS; axis < LASTAXIS; axis++) sendBinaryFloat(accel.getData(axis));
+      for (byte axis = ROLL; axis < LASTAXIS; axis++) sendBinaryFloat(gyro.getData(axis));
+      for (byte axis = ROLL; axis < LASTAXIS; axis++) sendBinaryFloat(flightAngle.getGyroUnbias(axis));
+//      for (byte axis = XAXIS; axis < LASTAXIS; axis++) sendBinaryFloat(accel.getData(axis));
       #ifdef HeadingMagHold
 //        sendBinaryFloat(compass.getRawData(XAXIS));
 //        sendBinaryFloat(compass.getRawData(YAXIS));

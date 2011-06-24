@@ -87,6 +87,64 @@ public:
 };
 
 // ***********************************************************************
+// ************************* MPX_SCC Subclass ****************************
+// ***********************************************************************
+
+class Altitude_MPX_SCC : public Altitude {
+private:
+  uint16_t rawADC;
+  float baroScaleFactor;
+
+public: 
+  Altitude_MPX_SCC() : Altitude() {
+    #define ALTITUDE_ADDRESS 0x90 // 0x48 is 7bit address
+    groundAltitude = 0;
+    baroScaleFactor = 0.011; // experimentally found
+  }
+
+  // ***********************************************************
+  // Define all the virtual functions declared in the main class
+  // ***********************************************************
+  void initialize(void) {     
+    twiMaster.start(ALTITUDE_ADDRESS | I2C_WRITE);
+    twiMaster.write(0x01);
+    twiMaster.write(0xC2);
+    twiMaster.write(0xE3);
+    twiMaster.start(ALTITUDE_ADDRESS | I2C_WRITE);
+    twiMaster.write(0x00);
+    twiMaster.stop();
+   
+    measureGround();
+    setStartAltitude(getGroundAltitude());
+  }
+  
+  void measure(void) {
+    twiMaster.start(ALTITUDE_ADDRESS | I2C_READ);
+    rawADC = ((twiMaster.read(0) << 8) | twiMaster.read(1));
+      
+    if (rawADC > 500 && rawADC < 32000) {
+      #ifdef UseLED_Library
+        mainLED.on();
+      #else
+        digitalWrite(LEDPIN, HIGH); // 16-1 bit since not in differential mode = 32768 steps
+      #endif
+    } else {
+      #ifdef UseLED_Library
+        mainLED.off();
+      #else 
+        digitalWrite(LEDPIN, LOW); // out of range
+      #endif
+      altitudeHold = ALTPANIC;  // force manual control
+    }
+ 
+    twiMaster.stop();
+         
+    rawAltitude = rawADC * baroScaleFactor;
+    altitude = rawAltitude;
+  }
+};
+
+// ***********************************************************************
 // ************************* BMP085 Subclass *****************************
 // ***********************************************************************
 class Altitude_AeroQuad_v2 : public Altitude {
@@ -109,7 +167,7 @@ private:
   void requestRawPressure(void) {
     twiMaster.start(ALTITUDE_ADDRESS | I2C_WRITE);
     twiMaster.write(0xF4);
-    twiMaster.write(0x34 + (overSamplingSetting<<6));
+    twiMaster.write(0x34 + (overSamplingSetting << 6));
     twiMaster.stop();
   }
   

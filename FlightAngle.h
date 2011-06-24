@@ -350,17 +350,6 @@ public:
   void calculate(float rollRate,            float pitchRate,      float yawRate,  \
                  float longitudinalAccel,   float lateralAccel,   float verticalAccel, \
                  float oneG,                float magX,           float magY) {
-  #ifdef BinaryWrite
-    if (armed == ON) {
-      printInt(21845); // Start word of 0x5555
-      sendBinaryuslong(currentTime);
-      sendBinaryFloat(longitudinalAccel);
-      sendBinaryFloat(lateralAccel);
-      sendBinaryFloat(verticalAccel);
-      printInt(32767); // Stop word of 0x7FFF
-    }
-  #endif 
-
     matrixUpdate(rollRate, pitchRate, yawRate); 
     normalize();
     driftCorrection(longitudinalAccel, lateralAccel, verticalAccel, oneG, magX, magY);

@@ -108,7 +108,6 @@ public:
     accelADC[YAXIS] = analogRead(accelChannel[ROLL]);
     accelADC[ZAXIS] = analogRead(accelChannel[ZAXIS]);
     for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
-      //accelData[axis] = computeFirstOrder(accelADC[axis] * accelScaleFactor, &firstOrder[axis]);
       accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
     }
   }
@@ -202,7 +201,7 @@ public:
       #else
         sample();
       #endif
-      //accelData[axis] = computeFirstOrder(accelADC[axis] * accelScaleFactor, &firstOrder[axis]);
+
       accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
     }
   }
@@ -215,7 +214,6 @@ public:
 #if defined(AeroQuad_Mini)
 class Accel_AeroQuadMini : public Accel {
 private:
-//  int accelAddress;
   
 public:
   Accel_AeroQuadMini() : Accel(){
@@ -273,7 +271,7 @@ public:
       #else
         sample();
       #endif
-      //accelData[axis] = computeFirstOrder(accelADC[axis] * accelScaleFactor, &firstOrder[axis]);
+
       accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
     }
   }
@@ -314,7 +312,6 @@ public:
       rawADC = analogRead_ArduCopter_ADC(accelChannel[axis]);
       if (rawADC > 500) { // Check if measurement good
           accelADC[axis] = rawADC;
-        //accelData[axis] = computeFirstOrder(accelADC[axis] * accelScaleFactor, &firstOrder[axis]);
         accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
       }
     }
@@ -353,7 +350,6 @@ public:
     accelADC[ZAXIS] =  NWMP_acc[ZAXIS];  // Configured for Paris MultiWii Board
     
     for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
-      //accelData[axis] = computeFirstOrder(accelADC[axis] * accelScaleFactor, &firstOrder[axis]);
       accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
     }
   }
@@ -384,9 +380,6 @@ public:
       accelADC[YAXIS] = chr6dm.data.ay - accelZero[YAXIS];
       accelADC[ZAXIS] = chr6dm.data.az - accelOneG;
 
-      //accelData[XAXIS] = filterSmoothWithTime(accelADC[XAXIS], accelData[XAXIS], smoothFactor, ((currentTime - previousTime) / 5000.0)); //to get around 1
-      //accelData[YAXIS] = filterSmoothWithTime(accelADC[YAXIS], accelData[YAXIS], smoothFactor, ((currentTime - previousTime) / 5000.0));
-      //accelData[ZAXIS] = filterSmoothWithTime(accelADC[ZAXIS], accelData[ZAXIS], smoothFactor, ((currentTime - previousTime) / 5000.0));
       accelData[XAXIS] = filterSmooth(accelADC[XAXIS], accelData[XAXIS], smoothFactor); //to get around 1
       accelData[YAXIS] = filterSmooth(accelADC[YAXIS], accelData[YAXIS], smoothFactor);
       accelData[ZAXIS] = filterSmooth(accelADC[ZAXIS], accelData[ZAXIS], smoothFactor);
