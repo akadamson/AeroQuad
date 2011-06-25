@@ -107,11 +107,11 @@ public:
   // ***********************************************************
   void initialize(void) {     
     twiMaster.start(ALTITUDE_ADDRESS | I2C_WRITE);
-    twiMaster.write(0x01);
-    twiMaster.write(0xC2);
-    twiMaster.write(0xE3);
+    twiMaster.write(0x01); // config register
+    twiMaster.write(0xC2); // msb
+    twiMaster.write(0xE3); // lsb
     twiMaster.start(ALTITUDE_ADDRESS | I2C_WRITE);
-    twiMaster.write(0x00);
+    twiMaster.write(0x00); // conversion register
     twiMaster.stop();
    
     measureGround();
@@ -123,10 +123,11 @@ public:
     rawADC = ((twiMaster.read(0) << 8) | twiMaster.read(1));
       
     if (rawADC > 500 && rawADC < 32000) {
+      // 16-1 bit since not in differential mode = 32768 steps
       #ifdef UseLED_Library
         mainLED.on();
       #else
-        digitalWrite(LEDPIN, HIGH); // 16-1 bit since not in differential mode = 32768 steps
+        digitalWrite(LEDPIN, HIGH);
       #endif
     } else {
       #ifdef UseLED_Library
