@@ -20,7 +20,6 @@
 
 class Gyro {
 public:
-//  float gyroFullScaleOutput;
   float gyroScaleFactor;
   float smoothFactor;
   int gyroChannel[3];
@@ -35,8 +34,6 @@ public:
     int gyroZero[3];
   #endif
   int gyroADC[3];
-//  byte rollChannel, pitchChannel, yawChannel;
-//  int sign[3];
   float gyroHeading;
   long previousGyroTime;
 
@@ -130,8 +127,10 @@ public:
     if (gyroData[YAW] > radians(1.0) || gyroData[YAW] < radians(-1.0))
       gyroHeading += gyroData[YAW] * ((currentGyroTime - previousGyroTime) / 1000000.0);
       previousGyroTime = currentGyroTime;
-    if (gyroHeading > PI)  gyroHeading -= (2*PI);
-    if (gyroHeading < -PI) gyroHeading += (2*PI);
+    if (gyroHeading > PI)
+      gyroHeading -= (2*PI);
+    if (gyroHeading < -PI)
+      gyroHeading += (2*PI);
   }
 
 /******************************************************/
@@ -333,8 +332,10 @@ public:
     if (gyroData[YAW] > radians(1.0) || gyroData[YAW] < radians(-1.0))
       gyroHeading += gyroData[YAW] * ((currentGyroTime - previousGyroTime) / 1000000.0);
       previousGyroTime = currentGyroTime;
-    if (gyroHeading > PI)  gyroHeading -= (2*PI);
-    if (gyroHeading < -PI) gyroHeading += (2*PI);
+    if (gyroHeading > PI)
+      gyroHeading -= (2*PI);
+    if (gyroHeading < -PI)
+      gyroHeading += (2*PI);
   }
 
 /******************************************************/
@@ -425,8 +426,10 @@ public:
     if (gyroData[YAW] > radians(1.0) || gyroData[YAW] < radians(-1.0))
       gyroHeading += gyroData[YAW] * ((currentGyroTime - previousGyroTime) / 1000000.0);
       previousGyroTime = currentGyroTime;
-    if (gyroHeading > PI)  gyroHeading -= (2*PI);
-    if (gyroHeading < -PI) gyroHeading += (2*PI);
+    if (gyroHeading > PI)
+      gyroHeading -= (2*PI);
+    if (gyroHeading < -PI)
+      gyroHeading += (2*PI);
   }
 
 /******************************************************/
@@ -493,8 +496,10 @@ public:
     if (gyroData[YAW] > radians(1.0) || gyroData[YAW] < radians(-1.0))
       gyroHeading += gyroData[YAW] * ((currentGyroTime - previousGyroTime) / 1000000.0);
       previousGyroTime = currentGyroTime;
-    if (gyroHeading > PI)  gyroHeading -= (2*PI);
-    if (gyroHeading < -PI) gyroHeading += (2*PI);
+    if (gyroHeading > PI)
+      gyroHeading -= (2*PI);
+    if (gyroHeading < -PI)
+      gyroHeading += (2*PI);
   }
 
 /******************************************************/

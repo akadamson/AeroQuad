@@ -158,7 +158,6 @@ private:
   int b1, b2, mb, mc, md;
   long pressure;
   long temperature;
-  // HJI int altitudeAddress;
   long rawPressure, rawTemperature;
   byte select, pressureCount;
   float pressureFactor;
@@ -184,7 +183,6 @@ private:
   }
 
   void requestRawTemperature(void) {
-    //updateRegisterI2C(altitudeAddress, 0xF4, 0x2E);
     twiMaster.start(ALTITUDE_ADDRESS | I2C_WRITE);
     twiMaster.write(0xF4);
     twiMaster.write(0x2E);
@@ -305,6 +303,7 @@ public:
     pressure = (p + ((x1 + x2 + 3791) >> 4));
     
     rawAltitude = 44330 * (1 - pow(pressure/101325.0, pressureFactor)); // returns absolute altitude in meters
+    // save the line below it will remove approx 700 bytes of code for the 328p platform, but it's unknown how accurate the result will be.
     //rawAltitude = (101325.0-pressure)/4096*346;
     altitude = filterSmooth(rawAltitude, altitude, smoothFactor);
   }

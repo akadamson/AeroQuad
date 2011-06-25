@@ -209,7 +209,7 @@ public:
   void lowBatteryEvent(byte level) {
     long currentBatteryTime = millis() - previousBatteryTime;
     if (level == OK) {
-      #ifdef UseLED_Library
+      #if defined(UseLED_Library) && (defined(AeroQuadMega_Wii) || defined(AeroQuadMega_v2))
         buzzer.off();
  //       statusLED.setOff();
       #else
@@ -223,7 +223,7 @@ public:
       }
       if (currentBatteryTime > 1100) {
         autoDescent = 75;
-        #ifdef UseLED_Library
+        #if defined(UseLED_Library) && (defined(AeroQuadMega_Wii) || defined(AeroQuadMega_v2))
 //          statusLED.setOn();
           buzzer.on();
         #else
@@ -234,7 +234,7 @@ public:
       if (currentBatteryTime > 1200) {
         previousBatteryTime = millis();
         autoDescent = 0;
-        #ifdef UseLED_Library
+        #if defined(UseLED_Library) && (defined(AeroQuadMega_Wii) || defined(AeroQuadMega_v2))
 //          statusLED.setOff();
           buzzer.off();
         #else
@@ -246,7 +246,7 @@ public:
     if (level == ALARM) {
       if (firstAlarm == OFF) autoDescent = 0; // intialize autoDescent to zero if first time in ALARM state
       firstAlarm = ON;
-      #ifdef UseLED_Library
+      #if defined(UseLED_Library) && (defined(AeroQuadMega_Wii) || defined(AeroQuadMega_v2))
         buzzer.on();
 //        statusLED.setOn();
       #else

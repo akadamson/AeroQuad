@@ -22,12 +22,6 @@ class Motors {
 public:
   // Assume maximum number of motors is 8, leave array indexes unused if lower number
   int motorAxisCommand[3];
-  //int motorAxisCommandRoll[LASTMOTOR];
-  //int motorAxisCommandPitch[LASTMOTOR];
-  //int motorAxisCommandYaw[LASTMOTOR];
-  //int motorMixerSettingRoll[LASTMOTOR];
-  //int motorMixerSettingPitch[LASTMOTOR];
-  //int motorMixerSettingYaw[LASTMOTOR];
   int motorCommand[LASTMOTOR];
   int minCommand[LASTMOTOR];
   int maxCommand[LASTMOTOR];
@@ -47,12 +41,6 @@ public:
     motorAxisCommand[PITCH] = 0;
     motorAxisCommand[YAW] = 0;
     for (byte motor = 0; motor < LASTMOTOR; motor++) {
-      //motorAxisCommandRoll[motor] = 0;
-      //motorAxisCommandPitch[motor] = 0;
-      //motorAxisCommandYaw[motor] = 0;
-      //motorMixerSettingRoll[motor] = 0;
-      //motorMixerSettingPitch[motor] = 0;
-      //motorMixerSettingYaw[motor] = 0;
       motorCommand[motor] = 1000;
       minCommand[motor] = MINCOMMAND;
       maxCommand[motor] = MAXCOMMAND;
@@ -62,8 +50,6 @@ public:
   };
 
   // The following function calls must be defined in any new subclasses
-//  virtual void initialize(void);
-//  virtual void write (void);
   virtual void commandAllMotors(int motorCommand);
 
   //Any number of optional methods can be configured as needed by the SubSystem to expose functionality externally
@@ -168,7 +154,6 @@ private:
     analogWrite(REARMOTORPIN,  motorCommand[REAR]  / 8);
     analogWrite(RIGHTMOTORPIN, motorCommand[RIGHT] / 8);
     analogWrite(LEFTMOTORPIN,  motorCommand[LEFT]  / 8);
-
   }
 
   void commandAllMotors(int _motorCommand) {   // Sends commands to all motors

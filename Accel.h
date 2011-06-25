@@ -120,7 +120,6 @@ public:
 #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2)
 class Accel_AeroQuadMega_v2 : public Accel {
 private:
-//  int accelAddress;
   
 public:
   Accel_AeroQuadMega_v2() : Accel(){

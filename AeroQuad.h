@@ -110,7 +110,6 @@
 struct PIDdata {
   float P, I, D;
   float lastPosition;
-  // AKA experiments with PID
   float previousPIDTime;
   bool firstPass;
   float integratedError;
@@ -128,6 +127,8 @@ struct PIDdata {
 // HEADING = 5 (used for heading hold)
 // ALTITUDE = 8 (used for altitude hold)
 // ZDAMPENING = 9 (used in altitude hold to dampen vertical accelerations)
+// XVELOCITY, YVELOCITY = 10, 11 (used in position/velocity mode - gps required)
+// XPOSITION, YPOSITION = 12, 13 (used in position/velocity mode - gps required)
 float windupGuard; // Read in from EEPROM
 
 // Smoothing filter parameters
@@ -189,15 +190,6 @@ int minAcro; // Read in from EEPROM, defines min throttle during flips
 #define PWM2RAD 0.002 //  Based upon 5RAD for full stick movement, you take this times the RAD to get the PWM conversion factor
 #define PWM2MPS 0.002 //  Based upon 5MPS for full stick movement, you take this times the MPS to get the PWM conversion factor
 
-// Auto level setup
-//float levelAdjust[2] = {0.0,0.0};
-//int levelAdjust[2] = {0,0};
-//int levelLimit; // Read in from EEPROM
-//int levelOff; // Read in from EEPROM
-// Scale to convert 1000-2000 PWM to +/- 45 degrees
-//float mLevelTransmitter = 0.09;
-//float bLevelTransmitter = -135;
-
 #if defined(AeroQuadMega_CHR6DM) || defined(APM_OP_CHR6DM)
   float CHR_RollAngle;
   float CHR_PitchAngle;
@@ -205,7 +197,6 @@ int minAcro; // Read in from EEPROM, defines min throttle during flips
 
 // Heading hold
 byte headingHoldConfig;
-//float headingScaleFactor;
 float commandedYaw = 0;
 float headingHold = 0; // calculated adjustment for quad to go to heading (PID output)
 float heading = 0; // measured heading from yaw gyro (process variable)
@@ -273,19 +264,6 @@ byte safetyCheck = OFF;
 byte update = 0;
 HardwareSerial *binaryPort;
 
-/**************************************************************/
-/******************* Loop timing parameters *******************/
-/**************************************************************/
-/*
-#define RECEIVERLOOPTIME 100000  // 100ms, 10Hz
-#define COMPASSLOOPTIME 103000   // 103ms, ~10Hz
-#define ALTITUDELOOPTIME 50000   // 50ms x 2, 10Hz (alternates between temperature and pressure measurements)
-#define BATTERYLOOPTIME 100000   // 100ms, 10Hz
-#define CAMERALOOPTIME 20000     // 20ms, 50Hz
-#define FASTTELEMETRYTIME 15000  // 15ms, 67Hz
-#define TELEMETRYLOOPTIME 100000 // 100ms, 10Hz for slower computers/cables (more rough Configurator values)
-*/
-
 float G_Dt = 0.002;
 // Offset starting times so that events don't happen at the same time
 // main loop times
@@ -302,17 +280,6 @@ unsigned long hundredHZpreviousTime;
 unsigned long hundredHZ1previousTime;
 #endif
 unsigned long twoHundredHZpreviousTime;
-// old times.
-//unsigned long receiverTime = 0;
-//unsigned long compassTime = 5000;
-//unsigned long altitudeTime = 10000;
-//unsigned long batteryTime = 15000;
-//unsigned long autoZeroGyroTime = 0;
-//#ifdef CameraControl
-//unsigned long cameraTime = 10000;
-//#endif
-//unsigned long fastTelemetryTime = 0;
-//unsigned long telemetryTime = 50000; // make telemetry output 50ms offset from receiver check
 
 // jihlein: wireless telemetry defines
 /**************************************************************/
@@ -345,14 +312,6 @@ unsigned long twoHundredHZpreviousTime;
 /********************** Debug Parameters **********************/
 /**************************************************************/
 // Enable/disable control loops for debug
-//#define DEBUG
-//byte receiverLoop = ON;
-//byte telemetryLoop = ON;
-//byte sensorLoop = ON;
-//byte controlLoop = ON;
-//#ifdef CameraControl
-//byte cameraLoop = ON; // Note: stabilization camera software is still under development, moved to Arduino Mega
-//#endif
 #ifdef OpenlogBinaryWrite
   byte fastTransfer = ON; // Used for troubleshooting
 #else
@@ -420,21 +379,15 @@ typedef struct {
   
   float WINDUPGUARD_ADR;
   float XMITFACTOR_ADR;
-  // HJI float LEVELPITCHCAL_ADR;
-  // HJI float LEVELROLLCAL_ADR;
-  // HJI float LEVELZCAL_ADR;
   float FILTERTERM_ADR;
   float HEADINGSMOOTH_ADR;
   float AREF_ADR;
   float FLIGHTMODE_ADR;
   float HEADINGHOLD_ADR;
   float MINACRO_ADR;
-  // HJI float ACCEL1G_ADR;
-  //float ALTITUDE_PGAIN_ADR;
   float ALTITUDE_MAX_THROTTLE_ADR;
   float ALTITUDE_MIN_THROTTLE_ADR;
   float ALTITUDE_SMOOTH_ADR;
-  //float ZDAMP_PGAIN_ADR;
   float ALTITUDE_WINDUP_ADR;
   float MAGXMAX_ADR;
   float MAGXMIN_ADR;
@@ -451,7 +404,6 @@ float nvrReadFloat(int address); // defined in DataStorage.h
 void nvrWriteFloat(float value, int address); // defined in DataStorage.h
 void nvrReadPID(unsigned char IDPid, unsigned int IDEeprom);
 void nvrWritePID(unsigned char IDPid, unsigned int IDEeprom);
-
 
 #define GET_NVR_OFFSET(param) ((int)&(((t_NVR_Data*) 0)->param))
 #define readFloat(addr) nvrReadFloat(GET_NVR_OFFSET(addr))
@@ -492,4 +444,3 @@ int freemem(){
         free_memory = ((int)&free_memory) - ((int)__brkval);
     return free_memory;
 }
-

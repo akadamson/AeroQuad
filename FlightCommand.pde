@@ -47,7 +47,6 @@ void readPilotCommands() {
     // Zero Gyro and Accel sensors (left stick lower left, right stick lower right corner)
     if ((receiver.getRaw(YAW) < MINCHECK) && (receiver.getRaw(ROLL) > MAXCHECK) && (receiver.getRaw(PITCH) < MINCHECK)) {
       gyro.calibrate(); // defined in Gyro.h
-      //accel.setOneG(accel.getFlightData(ZAXIS));
       #if defined(AeroQuadMega_CHR6DM) || defined(APM_OP_CHR6DM)
         flightAngle.calibrate();
       #endif
@@ -83,10 +82,10 @@ void readPilotCommands() {
     // Check Mode switch for Rate, Attitude or Position
     // if greater than 1300 it's ATTITUDE
     if (receiver.getRaw(MODE) > 1250 && receiver.getRaw(MODE) < 1600) {
-      #ifdef UseLED_Library
+      #if defined(UseLED_Library) && (defined(AeroQuadMega_v2) || defined(AeroQuad_v18) || defined(AeroQuadMega_Wii))
         modeLED.setOn();
       #else
-        #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2)
+        #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2) || defined(dAeroQuadMega_Wii)
           digitalWrite(LED2PIN, HIGH);
         #endif
       #endif
@@ -97,7 +96,7 @@ void readPilotCommands() {
     }
     // if greater than 1750, it's Position
     else if (receiver.getRaw(MODE) > 1750) {
-      #ifdef UseLED_Library
+      #if defined(UseLED_Library) && (defined(AeroQuadMega_v2) || defined(AeroQuad_v18) || defined(AeroQuadMega_Wii))
         modeLED.resume();
       #else
         #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2) || defined(AeroQuadMega_Wii)
@@ -122,12 +121,12 @@ void readPilotCommands() {
     // else it's RATE
     else {
         if (flightMode != RATE)
-          #ifdef UseLED_Library
+          #if defined(UseLED_Library) && (defined(AeroQuadMega_Wii) || defined(AeroQuadMega_v2) || defined(AeroQuad_v18))
             modeLED.setOff();
-	  #else
-	    #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2)
+	        #else
+	          #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2) || defined(AeroQuadMega_Wii)
               digitalWrite(LED2PIN, LOW);
-	    #endif
+	          #endif
           #endif
           flightMode = RATE;
           #ifdef HasGPS
@@ -155,7 +154,6 @@ void readPilotCommands() {
          holdThrottle = receiver.getData(THROTTLE);
          PID[ALTITUDE].integratedError = 0;
          PID[ALTITUDE].lastPosition = holdAltitude;  // add to initialize hold position on switch turn on.
-         //accel.setOneG(accel.getFlightData(ZAXIS));  // AKA need to fix this
          storeAltitude = OFF;
        }
        altitudeHold = ON;
@@ -179,7 +177,3 @@ void readPilotCommands() {
    }
   #endif
 }
-
-
-
-

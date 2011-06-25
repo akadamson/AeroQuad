@@ -26,14 +26,12 @@ float updatePID(float targetPosition, float currentPosition, struct PIDdata *PID
   float iTerm;
   float pidOut;
   
-  // AKA PID experiments
   float deltaPIDTime = (currentTime - PIDparameters->previousPIDTime) / 1000000.0;
 
   PIDparameters->previousPIDTime = currentTime;  // AKA PID experiments
   
   error = targetPosition - currentPosition;
 
-// AKA PID experiments
 // special case of +/- PI
 /*
   if (PIDparameters->pidID == HEADING) {
@@ -42,7 +40,7 @@ float updatePID(float targetPosition, float currentPosition, struct PIDdata *PID
   }
 */    
   
-  if (PIDparameters->firstPass) { // AKA PID experiments
+  if (PIDparameters->firstPass) {
     PIDparameters->firstPass = false;
     return (constrain(error, -PIDparameters->windupGuard, PIDparameters->windupGuard));
   }

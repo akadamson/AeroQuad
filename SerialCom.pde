@@ -108,7 +108,6 @@ void readSerialCommand() {
     case 'Y': // Initialize EEPROM with default values
       initializeEEPROM(); // defined in DataStorage.h
       gyro.calibrate();
-//      accel.calibrate();
       zeroIntegralError();
 #ifdef HeadingMagHold
       compass.initialize();
@@ -322,17 +321,11 @@ void sendSerialTelemetry() {
       PrintValueComma(filteredAccel[axis]);
     }
     for (byte axis = ROLL; axis < YAW; axis++) {
-      //PrintValueComma(levelAdjust[axis]);
       PrintValueComma(0);
     }
     PrintValueComma(degrees(flightAngle.getData(ROLL)));
     PrintValueComma(degrees(flightAngle.getData(PITCH)));
-//    #if defined(HeadingMagHold) || defined(AeroQuadMega_CHR6DM) || defined(APM_OP_CHR6DM)
-      //PrintValueComma(compass.getAbsoluteHeading());
-      PrintValueComma(flightAngle.getDegreesHeading(YAW));
-//    #else
-//      PrintValueComma(0);
-//    #endif
+    PrintValueComma(flightAngle.getDegreesHeading(YAW));
     #ifdef AltitudeHold
       PrintValueComma(altitude.getData());
     #else
@@ -407,7 +400,6 @@ void sendSerialTelemetry() {
       PrintValueComma(receiver.getData(axis));
     }
     for (byte axis = ROLL; axis < YAW; axis++) {
-//      PrintValueComma(levelAdjust[axis]);
       PrintValueComma(0);
     }
     PrintValueComma(motors.getMotorAxisCommand(ROLL));
@@ -519,6 +511,7 @@ void sendSerialTelemetry() {
     comma();
     SERIAL_PRINT(camera.getmCameraYaw() , 2);
     comma();
+
     PrintValueComma(camera.getServoMinPitch());
     PrintValueComma(camera.getServoMinRoll());
     PrintValueComma(camera.getServoMinYaw());

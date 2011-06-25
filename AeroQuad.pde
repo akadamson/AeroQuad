@@ -35,7 +35,7 @@
 //#define AeroQuad_Paris_v3   // Define along with either AeroQuad_Wii to include specific changes for MultiWiiCopter Paris v3.0 board					
 //#define AeroQuadMega_v1     // Arduino Mega with AeroQuad Shield v1.7 and below
 #define AeroQuadMega_v2     // Arduino Mega with AeroQuad Shield v2.x
-//#define AeroQuadSeeed_v2     // Seeeduino Mega with AeroQuad Shield v1.8 (only works with AeroQuadMega_v2 defined as well
+#define AeroQuadSeeed_v2     // Seeeduino Mega with AeroQuad Shield v1.8 (only works with AeroQuadMega_v2 defined as well
 //#define AeroQuadMega_Wii    // Arduino Mega with Wii Sensors and AeroQuad Shield v2.x
 //#define ArduCopter          // ArduPilot Mega (APM) with APM Sensor Board
 //#define AeroQuadMega_CHR6DM // Clean Arduino Mega with CHR6DM as IMU/heading ref.
@@ -58,8 +58,8 @@
 // Warning:  If you enable HeadingHold or AltitudeHold and do not have the correct sensors connected, the flight software may hang
 // *******************************************************************************************************************************
 //#define HeadingMagHold // Enables HMC5843 Magnetometer, gets automatically selected if CHR6DM is defined
-//#define AltitudeHold // Enables Altitude Hold (experimental, use at your own risk) - requires one of the following to be defined
-//#define BMP_085 // Enable the BMP085 Baro
+#define AltitudeHold // Enables Altitude Hold (experimental, use at your own risk) - requires one of the following to be defined
+#define BMP_085 // Enable the BMP085 Baro
 //#define MPX_Baro // Enalbe the MPX series Baros with Honks board
 #define BattMonitor //define your personal specs in BatteryMonitor.h! Full documentation with schematic there
 //#define HasGPS // define for GPS
@@ -85,6 +85,7 @@
 #define Loop_200HZ // Enable 200Hz timing loop to double sample Accel/Gyro, consume once
 //#define Loop_1HZ // Enable 1Hz timing loop
 #define AKA_MODS // various modifications from AKA
+//#define UseLED_Library  // includes the LED library for those platforms that are built to suppor it
 
 // *******************************************************************************************************************************
 // Camera Stabilization
@@ -133,7 +134,6 @@
 
 #include <EEPROM.h>
 #include <TwiMaster.h>
-//#include <Wire.h>
 #ifdef HasGPS
   #include <TinyGPS.h>
 #endif
@@ -144,7 +144,6 @@
 TwiMaster twiMaster;
 
 #include "AeroQuad.h"
-//#include "I2C.h"
 #include "PID.h"
 #include "AQMath.h"
 #include "Receiver.h"
@@ -192,6 +191,10 @@ TwiMaster twiMaster;
 
 //****************************************************************************
 #ifdef AeroQuad_v18
+  #ifdef UseLED_Library
+    LED mainLED(LEDPIN);
+    BlinkLED modeLED(LED2PIN);
+  #endif
   Accel_AeroQuadMega_v2 accel;
   Gyro_AeroQuadMega_v2 gyro;
   Receiver_AeroQuad receiver;
@@ -245,7 +248,12 @@ TwiMaster twiMaster;
   #endif
   #ifdef AltitudeHold
     #include "Altitude.h"
+    #ifdef MPX_Baro
+    Altitude_MPX_SCC altitude;
+    #endif
+    #ifdef BMP_085
     Altitude_AeroQuad_v2 altitude;
+    #endif
   #endif
   #ifdef BattMonitor
     #include "BatteryMonitor.h"
@@ -279,11 +287,15 @@ TwiMaster twiMaster;
 
 //****************************************************************************
 #ifdef AeroQuadMega_v2
-  LED mainLED(LEDPIN);
-  BlinkLED modeLED(LED2PIN);
-  BlinkLED statusLED(LED3PIN);
+  #ifdef UseLED_Library
+    LED mainLED(LEDPIN);
+    BlinkLED modeLED(LED2PIN);
+    BlinkLED statusLED(LED3PIN);
+  #endif
   #ifdef BattMonitor  
-    LED buzzer(BUZZERPIN);
+    #ifdef UseLED_Library
+      LED buzzer(BUZZERPIN);
+    #endif
   #endif    
   Receiver_AeroQuadMega receiver;
   Motors_PWMtimer motors;
@@ -355,7 +367,12 @@ TwiMaster twiMaster;
   #endif
   #ifdef AltitudeHold
     #include "Altitude.h"
+    #ifdef MPX_Baro
+    Altitude_MPX_SCC altitude;
+    #endif
+    #ifdef BMP_085
     Altitude_AeroQuad_v2 altitude;
+    #endif
   #endif
   #ifdef BattMonitor
     #include "BatteryMonitor.h"
@@ -382,7 +399,12 @@ TwiMaster twiMaster;
   #endif
   #ifdef AltitudeHold
     #include "Altitude.h"
+    #ifdef MPX_Baro
+    Altitude_MPX_SCC altitude;
+    #endif
+    #ifdef BMP_085
     Altitude_AeroQuad_v2 altitude;
+    #endif
   #endif
   #ifdef BattMonitor
     #include "BatteryMonitor.h"
@@ -396,6 +418,11 @@ TwiMaster twiMaster;
 
 //****************************************************************************
 #ifdef AeroQuadMega_Wii
+  #ifdef UseLED_Library
+    LED mainLED(LEDPIN);
+    BlinkLED modeLED(LED2PIN);
+    BlinkLED statusLED(LED3PIN);
+  #endif
   Accel_Wii accel;
   Gyro_Wii gyro;
   Receiver_AeroQuadMega receiver;
@@ -412,7 +439,12 @@ TwiMaster twiMaster;
   #endif
   #ifdef AltitudeHold
     #include "Altitude.h"
+    #ifdef MPX_Baro
+    Altitude_MPX_SCC altitude;
+    #endif
+    #ifdef BMP_085
     Altitude_AeroQuad_v2 altitude;
+    #endif
   #endif
   #ifdef BattMonitor
     #include "BatteryMonitor.h"
@@ -440,7 +472,12 @@ TwiMaster twiMaster;
   Compass_CHR6DM compass;
   #ifdef AltitudeHold
     #include "Altitude.h"
+    #ifdef MPX_Baro
+    Altitude_MPX_SCC altitude;
+    #endif
+    #ifdef BMP_085
     Altitude_AeroQuad_v2 altitude;
+    #endif
   #endif
   #ifdef BattMonitor
     #include "BatteryMonitor.h"
@@ -464,7 +501,12 @@ TwiMaster twiMaster;
   Compass_CHR6DM compass;
   #ifdef AltitudeHold
     #include "Altitude.h"
+    #ifdef MPX_Baro
+    Altitude_MPX_SCC altitude;
+    #endif
+    #ifdef BMP_085
     Altitude_AeroQuad_v2 altitude;
+    #endif
   #endif
   #ifdef BattMonitor
     #include "BatteryMonitor.h"
@@ -513,7 +555,7 @@ void setup() {
     Serial1.begin(BAUD);
     PORTD = B00000100;
   #endif
-  #if defined(AeroQuad_v18) || defined(AeroQuad_Mini)
+  #if defined(AeroQuad_v18) || defined(AeroQuad_Mini) || defined(AeroQuadMega_v2)
     #ifndef UseLED_Library)
       pinMode(LED2PIN, OUTPUT);
       digitalWrite(LED2PIN, LOW);
@@ -543,9 +585,11 @@ void setup() {
   
   #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2) || defined(AeroQuad_Mini) || defined(AeroQuad_Wii) || defined(AeroQuadMega_Wii) || defined(AeroQuadMega_CHR6DM) || defined(APM_OP_CHR6DM) || defined(ArduCopter)
     twiMaster.init(false);
+    // Set I2C bus time to 100khz
     TWBR = (F_CPU/100000 - 16)/2;
   #endif
   #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2) || defined(AeroQuad_Mini)
+    // Set I2C bus time to 400khz
     TWBR = (F_CPU/400000 - 16)/2;
   #endif
 
@@ -567,17 +611,15 @@ void setup() {
   // Calibrate sensors
   gyro.autoZero(); // defined in Gyro.h
   zeroIntegralError();
-//  levelAdjust[ROLL] = 0;
-//  levelAdjust[PITCH] = 0;
   
   // Flight angle estimation
   #ifdef HeadingMagHold
     compass.initialize();
-    //setHeading = compass.getHeading();
     flightAngle.initialize(compass.getHdgXY(XAXIS), compass.getHdgXY(YAXIS));
   #else
     flightAngle.initialize(1.0, 0.0);  // with no compass, DCM matrix initalizes to a heading of 0 degrees
   #endif
+
   // Integral Limit for attitude mode
   // This overrides default set in readEEPROM()
   // Set for 1/2 max attitude command (+/-0.75 radians)
@@ -659,7 +701,6 @@ void setup() {
   #endif
   
   // AKA use a new low pass filter called a Lag Filter uncomment only if using DCM LAG filters
-  //  setupFilters(accel.accelOneG);
   setupFourthOrder();
 
   #ifdef HasGPS  
@@ -679,12 +720,12 @@ void setup() {
     receiver.setTransmitterTrim(YAW, receiver.getData(YAW));
   #endif
   
-  #if defined(AeroQuadMega_v2)
+  #if defined(UseLED_Library) && (defined(AeroQuadMega_v2) || defined(AeroQuadMega_Wii))
     statusLED.setInterval(250000);
     statusLED.setRunState(REPEATCTDN);
     statusLED.setOff();
   #endif
-  #ifdef UseLED_Library
+  #if defined(UseLED_Library) && (defined(AeroQuadMega_v2) || defined(AeroQuad_v18) || defined(AeroQuadMega_Wii))
     modeLED.setInterval(80000);
     modeLED.setRunState(REPEAT);
     modeLED.setOff();
@@ -918,8 +959,10 @@ void loop () {
         gps.run();
       #endif
 
-      #ifdef UseLED_Library
+      #if defined(UseLED_Library) && (defined(AeroQuadMega_v2) || defined(AeroQuadMega_Wii))
         statusLED.run(currentTime);
+      #endif
+      #if defined(UseLED_Library) && (defined(AeroQuadMega_v2) || defined(AeroQuad_v18) || defined(AeroQuadMega_Wii))
         modeLED.run(currentTime);
       #endif
 
@@ -997,9 +1040,17 @@ void loop () {
           } else { */
             if (gps.fix() == 3) {
               byte sats = gps.getSats();
-              statusLED.setCountDown(sats, REPEATCTDN);
+              #if defined(UseLED_Library) && (defined(AeroQuadMega_Wii) | defined(AeroQuadMega_v2))
+                statusLED.setCountDown(sats, REPEATCTDN);
+              #else
+                digitalWrite(LED3PIN, HIGH);
+              #endif
             } else {
-              statusLED.setOff();
+              #if defined(UseLED_Library) && (defined(AeroQuadMega_Wii) | defined(AeroQuadMega_v2))
+                statusLED.setOff();
+              #else
+                digitalWrite(LED3PIN, LOW);
+              #endif
             }
   //        }
         #endif  

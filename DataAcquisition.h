@@ -44,12 +44,8 @@
 // ADC Input Channel               Ch1    Ch2    Ch0    Ch4    Ch5    Ch6    Ch3    Ch7
 const unsigned char adc_cmd[9] = { 0xC7,  0x97,  0x87,  0xA7,  0xE7,  0xB7,  0xD7,  0xF7,  0x00 };
 
-// Commands for reading ADC channels on ADS7844  (old AQ way
-// ADC channel mapping             Ch0   Ch1   Ch2   Ch3   Ch4   Ch5   Ch6   Ch7 
-//const unsigned char adc_cmd[9]=  { 0x87, 0xC7, 0x97, 0xD7, 0xA7, 0xE7, 0xB7, 0xF7, 0x00 };
 volatile long adc_value[8] = { 0,0,0,0,0,0,0,0 };
 volatile unsigned char adc_counter[8]= { 0,0,0,0,0,0,0,0 };
-//volatile unsigned int adc_counter[8]= { 0,0,0,0,0,0,0,0 };
 
 unsigned char ADC_SPI_transfer(unsigned char data) {
   /* Wait for empty transmit buffer */
@@ -63,10 +59,8 @@ unsigned char ADC_SPI_transfer(unsigned char data) {
 }
 
 ISR (TIMER2_OVF_vect) {
-  //uint8_t ch;
   unsigned int adc_tmp;
   
-  //bit_set(PORTL,6); // To test performance
   bit_clear(PORTC,4);             // Enable Chip Select (PIN PC4)
   ADC_SPI_transfer(adc_cmd[0]);       // Command to read the first channel
   for (uint8_t ch = 0; ch < 8; ch++) {
@@ -114,8 +108,6 @@ void initialize_ArduCopter_ADC(void) {
 int analogRead_ArduCopter_ADC(unsigned char ch_num) {
   int result;
   
-  //while(adc_counter[ch_num] < 2) { }
-  
   cli();  // We stop interrupts to read the variables
   if (adc_counter[ch_num]>0)
 	  result = adc_value[ch_num]/adc_counter[ch_num];
@@ -141,7 +133,6 @@ void zero_ArduCopter_ADC(void) {
 // Modifications by jihlein 
 // ********************************************
 // I2C function calls defined in I2C.h
-//#ifndef AeroQuad_v18
 short NWMP_acc[3];
 short NWMP_gyro[3];
 byte  wmpSlow[3];
@@ -173,7 +164,6 @@ void Init_Gyro_Acc(void) {
 };
 
 void updateControls() {
-  //int i,j;
   unsigned char buffer[6];
 
   for(byte j=0;j<2;j++) {
@@ -207,7 +197,6 @@ void updateControls() {
     if (j == 0) delay(3);
   }
 }
-//#endif
 
 #if defined(AeroQuadMega_CHR6DM) || defined(APM_OP_CHR6DM)
     #include "CHR6DM.h"
@@ -226,6 +215,4 @@ void updateControls() {
         chr6dm.requestPacket();
     }
 #endif
-
-
 
