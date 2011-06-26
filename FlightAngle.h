@@ -193,17 +193,18 @@ void driftCorrection(float ax, float ay, float az, float oneG, float magX, float
                          accelVector[ZAXIS] * accelVector[ZAXIS])) / oneG;
                          
   // Weight for accelerometer info (<0.75G = 0.0, 1G = 1.0 , >1.25G = 0.0)
-  accelWeight = constrain(1 - 4*abs(1 - accelMagnitude),0,1);
+  // AKA accelWeight = constrain(1 - 4 * abs(1 - accelMagnitude) ,0 , 1);
+  //accelWeight = 1;
   
   // Weight for accelerometer info (<0.5G = 0.0, 1G = 1.0 , >1.5G = 0.0)
-  //accelWeight = constrain(1 - 2 * abs(1 - accelMagnitude), 0, 1);
+  accelWeight = constrain(1 - 2 * abs(1 - accelMagnitude), 0, 1);
   
   vectorCrossProduct(&errorRollPitch[0], &accelVector[0], &dcmMatrix[6]);
   
   vectorScale(3, &omegaP[0], &errorRollPitch[0], kpRollPitch * accelWeight);
   
-  errorRollPitch[0] = constrain(errorRollPitch[0], -0.000029, 0.000029);
-  errorRollPitch[1] = constrain(errorRollPitch[1], -0.000029, 0.000029);
+// AKA errorRollPitch[0] = constrain(errorRollPitch[0], -0.000029, 0.000029);
+// AKA errorRollPitch[1] = constrain(errorRollPitch[1], -0.000029, 0.000029);
   
   vectorScale(3, &scaledOmegaI[0], &errorRollPitch[0], kiRollPitch * accelWeight);
   vectorAdd(3, omegaI, omegaI, scaledOmegaI);
@@ -219,7 +220,7 @@ void driftCorrection(float ax, float ay, float az, float oneG, float magX, float
     
     vectorAdd(3, omegaP, omegaP, scaledOmegaP);
     
-    errorRollPitch[2] = constrain(errorRollPitch[2], -0.000029, 0.000029);
+// AKA    errorRollPitch[2] = constrain(errorRollPitch[2], -0.000029, 0.000029);
   
     vectorScale(3, &scaledOmegaI[0] ,&errorYaw[0], kiYaw);
     vectorAdd(3, omegaI, omegaI, scaledOmegaI);
@@ -334,20 +335,19 @@ public:
     dcmMatrix[7] =  0;
     dcmMatrix[8] =  1;
 
-    // Original from John
+/*    // Original from John
     kpRollPitch = 1.6;
     kiRollPitch = 0.005;
-    
+*/    
     kpYaw = -1.6;
     kiYaw = -0.005;
 
-/*    // released in 2.2
+    // released in 2.2
     kpRollPitch = 1.0;
     kiRollPitch = 0.002;
-
+/*
     kpYaw = -1.0;
     kiYaw = -0.002;
-*/
 
 /*   // released in 2.4
     kpRollPitch = 0.1;        // alternate 0.05;

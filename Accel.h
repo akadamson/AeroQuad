@@ -28,9 +28,13 @@ public:
   #endif
   float accelData[3];
   int accelADC[3];
-  #ifdef Loop_200HZ
-    int accelRAW[3][2];
+  #if defined(Loop_200HZ) || defined(Loop_400HZ)
     byte index;
+    #ifdef Loop_200HZ
+      int accelRAW[3][2];
+    #else
+      int accelRAW[3][4];
+    #endif
   #endif    
   float accelBias[3];
   float accelScaleFactor[3];
@@ -51,12 +55,20 @@ public:
     
     smoothFactor = readFloat(ACCSMOOTH_ADR);
     
-    #ifdef Loop_200HZ
-      index = 1;  // AKA index value for flip/flop store of 2 sample average
+    #if defined(Loop_200HZ) || defined (Loop_400HZ)
+      #ifdef Loop_200HZ
+        index = 1;  // AKA index value for flip/flop store of 2 sample average
+      #else
+        index = 0;
+      #endif
       // init flip/flop array to zero
       for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
         accelRAW[axis][0] = 0;
         accelRAW[axis][1] = 0;
+        #ifdef Loop_400HZ
+          accelRAW[axis][2] = 0;
+          accelRAW[axis][3] = 0;
+        #endif        
       }
     #endif
   }
@@ -181,13 +193,23 @@ public:
     twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
     twiMaster.write(0x02);
     twiMaster.start(ACCEL_ADDRESS | I2C_READ);
+    #ifdef Loop_400HZ
+      index++;
+    #endif
     for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
-      #ifdef Loop_200HZ
-        accelRAW[axis][index ^= 1] = ((twiMaster.read(0)|(twiMaster.read((axis*2+1) == 5) << 8)));
+      #if defined(Loop_200HZ) || defined(Loop_400HZ)
+        #ifdef Loop_200HZ
+          accelRAW[axis][index ^ 1] = ((twiMaster.read(0)|(twiMaster.read((axis * 2 + 1) == 5) << 8)));
+        #else
+          accelRAW[axis][index % 4] = ((twiMaster.read(0)|(twiMaster.read((axis * 2 + 1) == 5) << 8)));
+        #endif
       #else
-        accelADC[axis] = ((twiMaster.read(0)|(twiMaster.read((axis*2+1) == 5) << 8)));
+        accelADC[axis] = ((twiMaster.read(0)|(twiMaster.read((axis * 2 + 1) == 5) << 8)));
       #endif
     }
+    #ifdef Loop_200HZ
+      index ^= 1;
+    #endif
     twiMaster.stop();
   }
 
@@ -195,10 +217,18 @@ public:
 
   void measure(void) {
     for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
-      #ifdef Loop_200HZ
-        accelADC[axis] = ((int)((long)((long)accelRAW[axis][0] + (long)accelRAW[axis][1] - 1L) / 2L)) + 1; // average the 2 samples with integer rounding
+      #ifdef Loop_400HZ
+        long tempLong = 0;
+        for (byte i = 0; i <= LASTAXIS; i++) {
+          tempLong += accelRAW[axis][i];
+        }
+        accelADC[axis] = (int)((tempLong + 2L) / 4L);
       #else
-        sample();
+        #ifdef Loop_200HZ
+          accelADC[axis] = ((int)((long)((long)accelRAW[axis][0] + (long)accelRAW[axis][1] - 1L) / 2L)) + 1; // average the 2 samples with integer rounding
+        #else
+          sample();
+        #endif
       #endif
 
       accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
@@ -252,23 +282,41 @@ public:
     twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
     twiMaster.write(0x32);
     twiMaster.start(ACCEL_ADDRESS | I2C_READ);
+    #ifdef Loop_400HZ
+      index++;
+    #endif
     for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
-      #ifdef Loop_200HZ
-        accelRAW[axis][index ^= 1] = ((twiMaster.read(0)|(twiMaster.read((axis*2+1) == 5) << 8)));
+      #if defined(Loop_200HZ) || defined(Loop_400HZ)
+        #ifdef Loop_200HZ
+          accelRAW[axis][index ^ 1] = ((twiMaster.read(0)|(twiMaster.read((axis * 2 + 1) == 5) << 8)));
+        #else
+          accelRAW[axis][index % 4] = ((twiMaster.read(0)|(twiMaster.read((axis * 2 + 1) == 5) << 8)));
+        #endif
       #else
-        accelADC[axis] = ((twiMaster.read(0)|(twiMaster.read((axis*2+1) == 5) << 8)));
+        accelADC[axis] = ((twiMaster.read(0)|(twiMaster.read((axis * 2 + 1) == 5) << 8)));
       #endif
     }
+    #ifdef Loop_200HZ
+      index ^= 1;
+    #endif
     twiMaster.stop();
   }
 /******************************************************/
 
   void measure(void) {
     for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
-      #ifdef Loop_200HZ
-        accelADC[axis] = ((accelRAW[axis][0] + accelRAW[axis][1] - 1) / 2 ) + 1; // average the 2 samples with integer rounding
+      #ifdef Loop_400HZ
+        long tempLong = 0;
+        for (byte i = 0; i <= LASTAXIS; i++) {
+          tempLong += accelRAW[axis][i];
+        }
+        accelADC[axis] = (int)((tempLong + 2L) / 4L);
       #else
-        sample();
+        #ifdef Loop_200HZ
+          accelADC[axis] = ((int)((long)((long)accelRAW[axis][0] + (long)accelRAW[axis][1] - 1L) / 2L)) + 1; // average the 2 samples with integer rounding
+        #else
+          sample();
+        #endif
       #endif
 
       accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);

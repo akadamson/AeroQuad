@@ -353,7 +353,7 @@ void processFlightControlXMode(void) {
   processHeading();
 
   // ********************** Altitude Adjust **********************************
-  processAltitudeHold();
+  // AKA processAltitudeHold();
 
   // ********************** Calculate Motor Commands *************************
   if (armed && safetyCheck) {
@@ -407,7 +407,7 @@ void processFlightControlPlusMode(void) {
   processHeading();
 
   // ********************** Altitude Adjust **********************************
-  processAltitudeHold();
+  // AKA processAltitudeHold();
 
   // ********************** Calculate Motor Commands *************************
   if (armed && safetyCheck) {

@@ -24,9 +24,13 @@ public:
   float smoothFactor;
   int gyroChannel[3];
   float gyroData[3];
-  #ifdef Loop_200HZ
-    int gyroRAW[3][2];
+#if defined(Loop_200HZ) || defined(Loop_400HZ)
     byte index;
+//    #ifdef Loop_200HZ
+      int gyroRAW[3][2];
+//    #else
+//      int gyroRAW[3][4];
+//    #endif    
   #endif
   #if defined(AeroQuadMega_CHR6DM) || defined(APM_OP_CHR6DM)
     float gyroZero[3];
@@ -46,12 +50,16 @@ public:
     gyroZero[YAW] = readFloat(GYRO_YAW_ZERO_ADR);
     smoothFactor = readFloat(GYROSMOOTH_ADR);
 
-    #ifdef Loop_200HZ
+    #if defined(Loop_200HZ) || defined(Loop_400HZ)
       index = 1; // AKA index value for flip/flop store of 2 sample average
       // init flip/flop array to zero
       for (byte axis = ROLL; axis < LASTAXIS; axis++) {
         gyroRAW[axis][0] = 0;
         gyroRAW[axis][1] = 0;
+//        #ifdef Loop_400HZ
+//          gyroRAW[axis][2] = 0;
+//          gyroRAW[axis][3] = 0;
+//        #endif        
       }
     #endif
   }
@@ -217,10 +225,11 @@ public:
     twiMaster.write(0x1D);
     twiMaster.start(GYRO_ADDRESS | I2C_READ);
 
-    #ifdef Loop_200HZ
-      gyroRAW[ROLL][index ^= 1] =  ((twiMaster.read(0) << 8) | twiMaster.read(0))  - gyroZero[ROLL];
-      gyroRAW[PITCH][index ^= 1] = gyroZero[PITCH] - ((twiMaster.read(0) << 8) | twiMaster.read(0));
-      gyroRAW[YAW][index ^= 1]   = gyroZero[YAW]   - ((twiMaster.read(0) << 8) | twiMaster.read(1));
+    #if defined(Loop_200HZ) || defined(Loop_400HZ)
+      gyroRAW[ROLL][index ^ 1] =  ((twiMaster.read(0) << 8) | twiMaster.read(0))  - gyroZero[ROLL];
+      gyroRAW[PITCH][index ^ 1] = gyroZero[PITCH] - ((twiMaster.read(0) << 8) | twiMaster.read(0));
+      gyroRAW[YAW][index ^ 1]   = gyroZero[YAW]   - ((twiMaster.read(0) << 8) | twiMaster.read(1));
+      index ^= 1;
     #else
       gyroADC[ROLL] =  ((twiMaster.read(0) << 8) | twiMaster.read(0))  - gyroZero[ROLL];
       gyroADC[PITCH] = gyroZero[PITCH] - ((twiMaster.read(0) << 8) | twiMaster.read(0));
@@ -234,7 +243,7 @@ public:
 
   void measure(void) {
     for (byte axis = ROLL; axis < LASTAXIS; axis++) {
-      #ifdef Loop_200HZ
+      #if defined(Loop_200HZ) || defined(Loop_400HZ)
         gyroADC[axis] = ((int)((long)((long)gyroRAW[axis][0] + (long)gyroRAW[axis][1] - 1L) / 2L)) + 1; // average the 2 samples with integer rounding
       #else
         sample();

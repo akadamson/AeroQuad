@@ -30,12 +30,12 @@
 //#define AeroQuad_v1         // Arduino 2009 with AeroQuad Shield v1.7 and below
 //#define AeroQuad_v1_IDG     // Arduino 2009 with AeroQuad Shield v1.7 and below using IDG yaw gyro
 //#define AeroQuad_v18        // Arduino 2009 with AeroQuad Shield v1.8
-//#define AeroQuad_Mini       // Arduino Pro Mini with AeroQuad Mini Shield V1.0
+#define AeroQuad_Mini       // Arduino Pro Mini with AeroQuad Mini Shield V1.0
 //#define AeroQuad_Wii        // Arduino 2009 with Wii Sensors and AeroQuad Shield v1.x
 //#define AeroQuad_Paris_v3   // Define along with either AeroQuad_Wii to include specific changes for MultiWiiCopter Paris v3.0 board					
 //#define AeroQuadMega_v1     // Arduino Mega with AeroQuad Shield v1.7 and below
-#define AeroQuadMega_v2     // Arduino Mega with AeroQuad Shield v2.x
-#define AeroQuadSeeed_v2     // Seeeduino Mega with AeroQuad Shield v1.8 (only works with AeroQuadMega_v2 defined as well
+//#define AeroQuadMega_v2     // Arduino Mega with AeroQuad Shield v2.x
+//#define AeroQuadSeeed_v2     // Seeeduino Mega with AeroQuad Shield v1.8 (only works with AeroQuadMega_v2 defined as well
 //#define AeroQuadMega_Wii    // Arduino Mega with Wii Sensors and AeroQuad Shield v2.x
 //#define ArduCopter          // ArduPilot Mega (APM) with APM Sensor Board
 //#define AeroQuadMega_CHR6DM // Clean Arduino Mega with CHR6DM as IMU/heading ref.
@@ -58,8 +58,8 @@
 // Warning:  If you enable HeadingHold or AltitudeHold and do not have the correct sensors connected, the flight software may hang
 // *******************************************************************************************************************************
 //#define HeadingMagHold // Enables HMC5843 Magnetometer, gets automatically selected if CHR6DM is defined
-#define AltitudeHold // Enables Altitude Hold (experimental, use at your own risk) - requires one of the following to be defined
-#define BMP_085 // Enable the BMP085 Baro
+//#define AltitudeHold // Enables Altitude Hold (experimental, use at your own risk) - requires one of the following to be defined
+//#define BMP_085 // Enable the BMP085 Baro
 //#define MPX_Baro // Enalbe the MPX series Baros with Honks board
 #define BattMonitor //define your personal specs in BatteryMonitor.h! Full documentation with schematic there
 //#define HasGPS // define for GPS
@@ -82,7 +82,8 @@
 //#define BinaryWrite // Enables fast binary transfer of flight data to Configurator
 //#define BinaryWritePID // Enables fast binary transfer of attitude PID data
 //#define OpenlogBinaryWrite // Enables fast binary transfer to serial2 and openlog hardware
-#define Loop_200HZ // Enable 200Hz timing loop to double sample Accel/Gyro, consume once
+#define Loop_400HZ // Enable an experimental 400hz timing loop for only the Accel/Gyro reads, still consume them at 100hz
+//#define Loop_200HZ // Enable 200Hz timing loop to double sample Accel/Gyro, consume once
 //#define Loop_1HZ // Enable 1Hz timing loop
 #define AKA_MODS // various modifications from AKA
 //#define UseLED_Library  // includes the LED library for those platforms that are built to suppor it
@@ -112,10 +113,15 @@
 #define Loop_1HZ
 #endif
 
-#if !defined(AeroQuadMega_v2)// || !defined(AeroQuad_v18) || !defined(AeroQuad_Mini)
+#if !defined(AeroQuadMega_v2)
   #if !defined(AeroQuad_v18)
     #if !defined(AeroQuad_Mini)
-      #undef Loop_200HZ
+      #ifdef Loop_200HZ
+        #undef Loop_200HZ
+      #endif
+      #ifdef Loop_400HZ
+        #undef Loop_400HZ
+      #endif  
     #endif
   #endif
 #endif
@@ -745,11 +751,17 @@ void loop () {
   currentTime = micros();
   deltaTime = currentTime - previousTime;
   
-  // Main scheduler loop set for 100hz
-  #ifdef Loop_200HZ
-    if (deltaTime >= 5000) {    
+  #ifdef Loop_400HZ
+  // Main scheduler loop set for 400hz
+    if (deltaTime >= 2500) {
   #else
-    if (deltaTime >= 10000) {
+    #ifdef Loop_200HZ
+    // Main scheduler loop set for 200hz
+      if (deltaTime >= 5000) {    
+    #else
+    // Main scheduler loop set for 100hz
+      if (deltaTime >= 10000) {
+    #endif
   #endif
 
     #ifdef DEBUG_LOOP
@@ -759,11 +771,11 @@ void loop () {
 
     frameCounter++;
     
-    #ifdef Loop_200HZ
+    #if defined(Loop_200HZ) || defined(Loop_400HZ)
       // ================================================================
-      // 200hz task loop
+      // 200/400hz task loop
       // ================================================================
-      if (frameCounter %   1 == 0) {  //  200 Hz tasks
+      if (frameCounter %   1 == 0) {  //  200/400 Hz tasks
         #ifdef DEBUG_LOOP
           digitalWrite(12, HIGH);
         #endif
@@ -780,11 +792,15 @@ void loop () {
       }
     #endif
     
+    #if defined(Loop_200HZ) || defined(Loop_400HZ)
     // ================================================================
-    // 100hz task loop
+    // 100hz task loop (second one interleaved with first when 200 or 400hz loop is selected)
     // ================================================================
-    #ifdef Loop_200HZ
-      if (frameCounter %   2 == 0) {  //  100 Hz tasks
+    #ifdef Loop_400HZ
+      if (frameCounter %   4 == 0) {  //  Second 100 Hz tasks interleaved with the other one
+    #else
+      if (frameCounter %   2 == 0) {  //  Second 100 Hz tasks interleaved with the other one
+    #endif
 
       #ifdef DEBUG_LOOP
         digitalWrite(8, HIGH);
@@ -804,11 +820,16 @@ void loop () {
     // ================================================================
     // 100hz task loop
     // ================================================================
-    #ifdef Loop_200HZ
-      if (frameCounter %   2 == 1) {  //  100 Hz tasks
+    #ifdef Loop_400HZ
+        if (frameCounter %   4 == 1) {  //  100 Hz tasks
     #else
-      if (frameCounter %   1 == 0) {  //  100 Hz tasks
+      #ifdef Loop_200HZ
+        if (frameCounter %   2 == 1) {  //  100 Hz tasks
+      #else
+        if (frameCounter %   1 == 0) {  //  100 Hz tasks
+      #endif
     #endif
+
       #ifdef DEBUG_LOOP
         digitalWrite(11, HIGH);
       #endif
@@ -901,7 +922,7 @@ void loop () {
       // AKA added for testing      
 //      fastTelemetry();
       
-      #ifndef Loop_200HZ
+      #if !defined(Loop_200HZ) && !defined(Loop_400HZ)
         processFlightControl();
       #endif
 
@@ -913,10 +934,14 @@ void loop () {
     // ================================================================
     // 50hz task loop
     // ================================================================
+    #ifdef Loop_400HZ
+      if (frameCounter %   8 == 0) {  //  50 Hz tasks
+    #else
     #ifdef Loop_200HZ
       if (frameCounter %   4 == 0) {  //  50 Hz tasks
     #else
       if (frameCounter %   2 == 0) {  //  50 Hz tasks
+    #endif
     #endif
       #ifdef DEBUG_LOOP
         digitalWrite(10, HIGH);
@@ -927,6 +952,10 @@ void loop () {
       
       // Reads external pilot commands and performs functions based on stick configuration
       readPilotCommands(); // defined in FlightCommand.pde
+
+      #if defined(AltitudeHold)
+        altitude.measure(); // defined in altitude.h
+      #endif
 
       #if defined(CameraControl)
         camera.setPitch(degrees(flightAngle.getData(PITCH)));
@@ -943,10 +972,14 @@ void loop () {
     // ================================================================
     // 25hz task loop
     // ================================================================
+    #ifdef Loop_400HZ
+      if (frameCounter %   16 == 1) {  //  25 Hz tasks offset forward by 1 frame count    
+    #else
     #ifdef Loop_200HZ
       if (frameCounter %   8 == 1) {  //  25 Hz tasks offset forward by 1 frame count
     #else
       if (frameCounter %   4 == 0) {  //  25 Hz tasks
+    #endif
     #endif
       #ifdef DEBUG_LOOP    
         digitalWrite(9, HIGH);
@@ -974,10 +1007,14 @@ void loop () {
     // ================================================================
     // 10hz task loop
     // ================================================================
+    #ifdef Loop_400HZ
+      if (frameCounter %  40 == 0) {  //   10 Hz tasks
+    #else
     #ifdef Loop_200HZ
       if (frameCounter %  20 == 0) {  //   10 Hz tasks
     #else
       if (frameCounter %  10 == 0) {  //   10 Hz tasks
+    #endif
     #endif
       #ifdef DEBUG_LOOP
         digitalWrite(8, HIGH);
@@ -994,10 +1031,10 @@ void loop () {
         batteryMonitor.measure(armed);
       #endif
       
-      #if defined(AltitudeHold)
-        altitude.measure(); // defined in altitude.h
+      #ifdef AltitudeHold
+        processAltitudeHold();
       #endif
-
+      
       #ifdef ConfiguratorTelem
         // Listen for configuration commands and reports telemetry
         readSerialCommand(); // defined in SerialCom.pde
@@ -1022,11 +1059,15 @@ void loop () {
 
     #ifdef Loop_1HZ
       // 1Hz loop timer for debugging info
+      #ifdef Loop_400HZ
+        if(frameCounter % 400 == 0) {
+      #else      
       #ifdef Loop_200HZ
         if(frameCounter % 200 == 0) {
       #else
         if(frameCounter % 100 == 0) {
       #endif	    
+      #endif
         #ifdef HasGPS
   /*        if (gps.holdPosition.valid) {
             if (++timerCounter > 20) {
@@ -1069,12 +1110,15 @@ void loop () {
    
     previousTime = currentTime;
   }
-  #ifdef Loop_200HZ
-    if (frameCounter >= 200) 
+  #ifdef Loop_400HZ
+    if (frameCounter >= 400) 
   #else
-    if (frameCounter >= 100) 
+    #ifdef Loop_200HZ
+      if (frameCounter >= 200) 
+    #else
+      if (frameCounter >= 100) 
+    #endif
   #endif
-  if (frameCounter >= 200) 
       frameCounter = 0;
 }
 

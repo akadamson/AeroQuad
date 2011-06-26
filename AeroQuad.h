@@ -276,7 +276,7 @@ unsigned long tenHZpreviousTime;
 unsigned long twentyFiveHZpreviousTime;
 unsigned long fiftyHZpreviousTime;
 unsigned long hundredHZpreviousTime;
-#ifdef Loop_200HZ
+#if defined(Loop_200HZ) || defined(Loop_400HZ)
 unsigned long hundredHZ1previousTime;
 #endif
 unsigned long twoHundredHZpreviousTime;
