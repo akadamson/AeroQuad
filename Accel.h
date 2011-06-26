@@ -170,8 +170,8 @@ public:
       
       twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
       twiMaster.write(0x20);
-      twiMaster.write(data & 0x0F);  // Set low pass filter to 10 Hz (value = 0000xxxx)
-      //twiMaster.write(data & 0x7F);  // Set low pass filter to 1200 Hz (value = 0111xxxx)
+      //twiMaster.write(data & 0x0F);  // Set low pass filter to 10 Hz (value = 0000xxxx)
+      twiMaster.write(data & 0x7F);  // Set low pass filter to 1200 Hz (value = 0111xxxx)
       
       
       twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
