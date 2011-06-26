@@ -191,9 +191,11 @@ void driftCorrection(float ax, float ay, float az, float oneG, float magX, float
   accelMagnitude = (sqrt(accelVector[XAXIS] * accelVector[XAXIS] + \
                          accelVector[YAXIS] * accelVector[YAXIS] + \
                          accelVector[ZAXIS] * accelVector[ZAXIS])) / oneG;
+
+//    accelWeight = constrain(1 - 10*abs(1 - accelMagnitude), 0, 1);
                          
   // Weight for accelerometer info (<0.75G = 0.0, 1G = 1.0 , >1.25G = 0.0)
-  // AKA accelWeight = constrain(1 - 4 * abs(1 - accelMagnitude) ,0 , 1);
+  // AKAaccelWeight = constrain(1 - 4 * abs(1 - accelMagnitude), 0, 1);
   //accelWeight = 1;
   
   // Weight for accelerometer info (<0.5G = 0.0, 1G = 1.0 , >1.5G = 0.0)
@@ -368,7 +370,9 @@ public:
     matrixUpdate(rollRate, pitchRate, yawRate); 
     normalize();
     driftCorrection(longitudinalAccel, lateralAccel, verticalAccel, oneG, magX, magY);
-    eulerAngles();
+    #if !defined(Loop_200HZ) && !defined(Loop_400HZ)
+      eulerAngles();
+    #endif
     earthAxisAccels(longitudinalAccel, lateralAccel, verticalAccel, oneG);
     #ifdef HasGPS
      if (flightMode == POSITION)
@@ -376,6 +380,12 @@ public:
           calcXYPosition();
     #endif    
   }
+  
+  #if defined(Loop_200HZ) || defined(Loop_400HZ)
+  void doEuler(void) {
+    eulerAngles();
+  }
+  #endif
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -534,8 +544,15 @@ public:
     argUpdate(rollRate,          pitchRate,    yawRate, \
               longitudinalAccel, lateralAccel, verticalAccel,  \
               measuredMagX,      measuredMagY, measuredMagZ);
+    #if !defined(Loop_200HZ) && !defined(Loop_400HZ)
+      eulerAngles();
+    #endif
+  }
+  #if defined(Loop_200HZ) || defined(Loop_400HZ)
+  void doEuler(void) {
     eulerAngles();
   }
+  #endif
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

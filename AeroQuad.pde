@@ -30,11 +30,11 @@
 //#define AeroQuad_v1         // Arduino 2009 with AeroQuad Shield v1.7 and below
 //#define AeroQuad_v1_IDG     // Arduino 2009 with AeroQuad Shield v1.7 and below using IDG yaw gyro
 //#define AeroQuad_v18        // Arduino 2009 with AeroQuad Shield v1.8
-#define AeroQuad_Mini       // Arduino Pro Mini with AeroQuad Mini Shield V1.0
+//#define AeroQuad_Mini       // Arduino Pro Mini with AeroQuad Mini Shield V1.0
 //#define AeroQuad_Wii        // Arduino 2009 with Wii Sensors and AeroQuad Shield v1.x
 //#define AeroQuad_Paris_v3   // Define along with either AeroQuad_Wii to include specific changes for MultiWiiCopter Paris v3.0 board					
 //#define AeroQuadMega_v1     // Arduino Mega with AeroQuad Shield v1.7 and below
-//#define AeroQuadMega_v2     // Arduino Mega with AeroQuad Shield v2.x
+#define AeroQuadMega_v2     // Arduino Mega with AeroQuad Shield v2.x
 //#define AeroQuadSeeed_v2     // Seeeduino Mega with AeroQuad Shield v1.8 (only works with AeroQuadMega_v2 defined as well
 //#define AeroQuadMega_Wii    // Arduino Mega with Wii Sensors and AeroQuad Shield v2.x
 //#define ArduCopter          // ArduPilot Mega (APM) with APM Sensor Board
@@ -58,8 +58,8 @@
 // Warning:  If you enable HeadingHold or AltitudeHold and do not have the correct sensors connected, the flight software may hang
 // *******************************************************************************************************************************
 //#define HeadingMagHold // Enables HMC5843 Magnetometer, gets automatically selected if CHR6DM is defined
-//#define AltitudeHold // Enables Altitude Hold (experimental, use at your own risk) - requires one of the following to be defined
-//#define BMP_085 // Enable the BMP085 Baro
+#define AltitudeHold // Enables Altitude Hold (experimental, use at your own risk) - requires one of the following to be defined
+#define BMP_085 // Enable the BMP085 Baro
 //#define MPX_Baro // Enalbe the MPX series Baros with Honks board
 #define BattMonitor //define your personal specs in BatteryMonitor.h! Full documentation with schematic there
 //#define HasGPS // define for GPS
@@ -809,6 +809,9 @@ void loop () {
       G_Dt = (currentTime - hundredHZ1previousTime) / 1000000.0;
       hundredHZ1previousTime = currentTime;
 
+      // test code only
+      flightAngle.doEuler();
+    
       processFlightControl();
  
       #ifdef DEBUG_LOOP
@@ -1031,9 +1034,7 @@ void loop () {
         batteryMonitor.measure(armed);
       #endif
       
-      #ifdef AltitudeHold
-        processAltitudeHold();
-      #endif
+      processAltitudeHold();
       
       #ifdef ConfiguratorTelem
         // Listen for configuration commands and reports telemetry

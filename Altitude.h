@@ -99,7 +99,7 @@ public:
   Altitude_MPX_SCC() : Altitude() {
     #define ALTITUDE_ADDRESS 0x90 // 0x48 is 7bit address
     groundAltitude = 0;
-    baroScaleFactor = 0.011; // experimentally found
+    baroScaleFactor = 0.018; // experimentally found
   }
 
   // ***********************************************************
