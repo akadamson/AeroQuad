@@ -290,13 +290,13 @@ private:
     byte result;
     
     //this section isn't working yet - trying to get contents of STAT returns 0x00, when it should be 0x01 for PAL or 0x02 for NTSC
-    Serial.println("Polling STAT");
+    SERIAL_PRINTLN("Polling STAT");
     digitalWrite( CS, LOW );
     result = spi_transfer( STAT );
 //    result = spi_transfer(0x00); //need to send dummy bits in order for uC to clock in bits from slave device?
     digitalWrite( CS, HIGH );
-    Serial.print("STAT= ");
-    Serial.println((unsigned)result);
+    SERIAL_PRINT("STAT= ");
+    SERIAL_PRINTLN((unsigned)result);
     
     if( (result & (0x01)) != 0 ) {
       //PAL signal detected on video in

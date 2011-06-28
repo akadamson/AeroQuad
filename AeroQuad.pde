@@ -58,8 +58,8 @@
 // Warning:  If you enable HeadingHold or AltitudeHold and do not have the correct sensors connected, the flight software may hang
 // *******************************************************************************************************************************
 //#define HeadingMagHold // Enables HMC5843 Magnetometer, gets automatically selected if CHR6DM is defined
-//#define AltitudeHold // Enables Altitude Hold (experimental, use at your own risk) - requires one of the following to be defined
-//#define BMP_085 // Enable the BMP085 Baro
+#define AltitudeHold // Enables Altitude Hold (experimental, use at your own risk) - requires one of the following to be defined
+#define BMP_085 // Enable the BMP085 Baro
 //#define MPX_Baro // Enalbe the MPX series Baros with Honks board
 #define BattMonitor //define your personal specs in BatteryMonitor.h! Full documentation with schematic there
 //#define HasGPS // define for GPS

@@ -26,11 +26,11 @@ public:
   float gyroData[3];
 #if defined(Loop_200HZ) || defined(Loop_400HZ)
     byte index;
-//    #ifdef Loop_200HZ
+    #ifdef Loop_200HZ
       int gyroRAW[3][2];
-//    #else
-//      int gyroRAW[3][4];
-//    #endif    
+    #else
+      int gyroRAW[3][4];
+    #endif    
   #endif
   #if defined(AeroQuadMega_CHR6DM) || defined(APM_OP_CHR6DM)
     float gyroZero[3];
@@ -51,15 +51,19 @@ public:
     smoothFactor = readFloat(GYROSMOOTH_ADR);
 
     #if defined(Loop_200HZ) || defined(Loop_400HZ)
-      index = 1; // AKA index value for flip/flop store of 2 sample average
+      #ifdef Loop_200HZ
+        index = 1; // AKA index value for flip/flop store of 2 sample average
+      #else
+        index = 0;
+      #endif
       // init flip/flop array to zero
       for (byte axis = ROLL; axis < LASTAXIS; axis++) {
         gyroRAW[axis][0] = 0;
         gyroRAW[axis][1] = 0;
-//        #ifdef Loop_400HZ
-//          gyroRAW[axis][2] = 0;
-//          gyroRAW[axis][3] = 0;
-//        #endif        
+        #ifdef Loop_400HZ
+          gyroRAW[axis][2] = 0;
+          gyroRAW[axis][3] = 0;
+        #endif        
       }
     #endif
   }
@@ -201,19 +205,20 @@ public:
     #else    
       if (twiMaster.read(1) != GYRO_ADDRESS/2)
     #endif    
-        Serial.println("Gyro not found!");
+        SERIAL_PRINTLN("Gyro not found!");
     else {
-      twiMaster.start(GYRO_ADDRESS | I2C_WRITE);  // send a reset to the device
+      twiMaster.start(GYRO_ADDRESS | I2C_WRITE);
       twiMaster.write(0x3E);
-      twiMaster.write(0x80);
+      twiMaster.write(0x80);  // send a reset to the device
   
-      twiMaster.start(GYRO_ADDRESS | I2C_WRITE);  // 10Hz low pass filter
+      twiMaster.start(GYRO_ADDRESS | I2C_WRITE);
       twiMaster.write(0x16);
-      twiMaster.write(0x1D);
+      twiMaster.write(0x1D);  // 10Hz low pass filter 1k internal sample
+      //twiMaster.write(0x18);  // 256hz filter 8k internal sample
   
-      twiMaster.start(GYRO_ADDRESS | I2C_WRITE);  // use internal oscillator
+      twiMaster.start(GYRO_ADDRESS | I2C_WRITE);
       twiMaster.write(0x3E);
-      twiMaster.write(0x01);
+      twiMaster.write(0x01);  // use PLL X axis gyro as oscilator
     }
     twiMaster.stop();
     delay(10);
@@ -224,12 +229,20 @@ public:
     twiMaster.start(GYRO_ADDRESS | I2C_WRITE);
     twiMaster.write(0x1D);
     twiMaster.start(GYRO_ADDRESS | I2C_READ);
-
+    #ifdef Loop_400HZ
+      index++;
+    #endif
     #if defined(Loop_200HZ) || defined(Loop_400HZ)
+      #ifdef Loop_200HZ
       gyroRAW[ROLL][index ^ 1] =  ((twiMaster.read(0) << 8) | twiMaster.read(0))  - gyroZero[ROLL];
       gyroRAW[PITCH][index ^ 1] = gyroZero[PITCH] - ((twiMaster.read(0) << 8) | twiMaster.read(0));
       gyroRAW[YAW][index ^ 1]   = gyroZero[YAW]   - ((twiMaster.read(0) << 8) | twiMaster.read(1));
       index ^= 1;
+      #else
+      gyroRAW[ROLL][index % 4] =  ((twiMaster.read(0) << 8) | twiMaster.read(0))  - gyroZero[ROLL];
+      gyroRAW[PITCH][index % 4] = gyroZero[PITCH] - ((twiMaster.read(0) << 8) | twiMaster.read(0));
+      gyroRAW[YAW][index % 4]   = gyroZero[YAW]   - ((twiMaster.read(0) << 8) | twiMaster.read(1));
+      #endif      
     #else
       gyroADC[ROLL] =  ((twiMaster.read(0) << 8) | twiMaster.read(0))  - gyroZero[ROLL];
       gyroADC[PITCH] = gyroZero[PITCH] - ((twiMaster.read(0) << 8) | twiMaster.read(0));
@@ -243,11 +256,20 @@ public:
 
   void measure(void) {
     for (byte axis = ROLL; axis < LASTAXIS; axis++) {
-      #if defined(Loop_200HZ) || defined(Loop_400HZ)
-        gyroADC[axis] = ((int)((long)((long)gyroRAW[axis][0] + (long)gyroRAW[axis][1] - 1L) / 2L)) + 1; // average the 2 samples with integer rounding
+      #ifdef Loop_400HZ
+        long tempLong = 0;
+        for (byte i = 0; i <= LASTAXIS; i++) {
+          tempLong += gyroRAW[axis][i];
+        }
+        gyroADC[axis] = (int)((tempLong + 2L) / 4L);
       #else
-        sample();
+        #ifdef Loop_200HZ
+          gyroADC[axis] = ((int)((long)((long)gyroRAW[axis][0] + (long)gyroRAW[axis][1] - 1L) / 2L)) + 1; // average the 2 samples with integer rounding
+        #else
+          sample();
+        #endif
       #endif
+      
       gyroData[axis] = filterSmooth((float)gyroADC[axis] * gyroScaleFactor, gyroData[axis], smoothFactor);
     }
       

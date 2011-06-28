@@ -150,7 +150,7 @@ public:
     delay(100);
     twiMaster.start(ACCEL_ADDRESS | I2C_READ);
     if (twiMaster.read(1) != 0x03)                
-      Serial.println("Accelerometer not found!");
+      SERIAL_PRINTLN("Accelerometer not found!");
     else {
       twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
       twiMaster.write(0x10);
@@ -260,7 +260,7 @@ public:
     delay(100);
     twiMaster.start(ACCEL_ADDRESS | I2C_READ);
     if (twiMaster.read(1) != 0xE5)
-      Serial.println("Accelerometer not found!");
+      SERIAL_PRINTLN("Accelerometer not found!");
     else {
       twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);  // set device to *measure*
       twiMaster.write(0x2D);

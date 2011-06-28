@@ -340,14 +340,14 @@ public:
 /*    // Original from John
     kpRollPitch = 1.6;
     kiRollPitch = 0.005;
-*/    
+    
     kpYaw = -1.6;
     kiYaw = -0.005;
-
+*/
     // released in 2.2
     kpRollPitch = 1.0;
     kiRollPitch = 0.002;
-/*
+
     kpYaw = -1.0;
     kiYaw = -0.002;
 
