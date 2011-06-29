@@ -141,7 +141,8 @@ public:
     twiMaster.stop();
          
     rawAltitude = rawADC * baroScaleFactor;
-    altitude = rawAltitude;
+//    altitude = rawAltitude;
+    altitude = filterSmooth(rawAltitude, altitude, smoothFactor);
   }
 };
 

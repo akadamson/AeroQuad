@@ -62,19 +62,19 @@
 #define BMP_085 // Enable the BMP085 Baro
 //#define MPX_Baro // Enalbe the MPX series Baros with Honks board
 #define BattMonitor //define your personal specs in BatteryMonitor.h! Full documentation with schematic there
-//#define HasGPS // define for GPS
+#define HasGPS // define for GPS
 // MUST DEFINE with GPS - unique to your location W = negative value, E = positive value
-//#define MAG_VAR (-(4 + (58.0/60.0)))
+#define MAG_VAR (-(4 + (58.0/60.0)))
 //#define GPSNMEA // Use an GPS which supports the NMEA string protocol
-//#define GPSBINARY // use the DIY MediaTek 3329 binary protocol
+#define GPSBINARY // use the DIY MediaTek 3329 binary protocol
 //#define RateModeOnly // Use this if you only have a gyro sensor, this will disable any attitude modes.
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 // You must define *only* one of the following 2 flightAngle calculations
 // if you only want DCM, then don't define either of the below
 // flightAngle recommendations: use FlightAngleARG if you do not have a magnetometer, use DCM if you have a magnetometer installed
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
-//#define FlightAngleDCM // Use this if you have a magnetometer installed
-#define FlightAngleARG // Use this if you do not have a magnetometer installed
+#define FlightAngleDCM // Use this if you have a magnetometer installed
+//#define FlightAngleARG // Use this if you do not have a magnetometer installed
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
 // Misc defines
 #define ConfiguratorTelem // Enables telemetry interface on Serial for Configurator
@@ -107,9 +107,9 @@
  ****************************************************************************/
 // Debugging defines
 //#define DEBUG_LOOP
-//#define DEBUG_GPS
+#define DEBUG_GPS
 
-#ifdef DEBUG_GPS
+#if defined(DEBUG_GPS) || defined(HasGPS)
 #define Loop_1HZ
 #endif
 
@@ -124,6 +124,14 @@
       #endif  
     #endif
   #endif
+#endif
+
+#if defined(FlightAngleARG) && defined(HasGPS)
+#undef HasGPS
+#endif
+
+#if defined(FlightAngleDCM) && defined(FlightAngleARG)
+#undef FlightAngleARG
 #endif
 
 #if defined(MAX7456_OSD) && !defined(AeroQuadMega_v2) && !defined(AeroQuadMega_Wii)
@@ -797,7 +805,7 @@ void loop () {
     // 100hz task loop (second one interleaved with first when 200 or 400hz loop is selected)
     // ================================================================
     #ifdef Loop_400HZ
-      if (frameCounter %   4 == 0) {  //  Second 100 Hz tasks interleaved with the other one
+      if (frameCounter %   4 == 1) {  //  Second 100 Hz tasks interleaved with the other one
     #else
       if (frameCounter %   2 == 0) {  //  Second 100 Hz tasks interleaved with the other one
     #endif
@@ -824,7 +832,7 @@ void loop () {
     // 100hz task loop
     // ================================================================
     #ifdef Loop_400HZ
-        if (frameCounter %   4 == 1) {  //  100 Hz tasks
+        if (frameCounter %   4 == 0) {  //  100 Hz tasks
     #else
       #ifdef Loop_200HZ
         if (frameCounter %   2 == 1) {  //  100 Hz tasks
@@ -938,7 +946,7 @@ void loop () {
     // 50hz task loop
     // ================================================================
     #ifdef Loop_400HZ
-      if (frameCounter %   8 == 0) {  //  50 Hz tasks
+      if (frameCounter %   8 == 2) {  //  50 Hz tasks
     #else
     #ifdef Loop_200HZ
       if (frameCounter %   4 == 0) {  //  50 Hz tasks
@@ -1011,7 +1019,7 @@ void loop () {
     // 10hz task loop
     // ================================================================
     #ifdef Loop_400HZ
-      if (frameCounter %  40 == 0) {  //   10 Hz tasks
+      if (frameCounter %  40 == 3) {  //   10 Hz tasks
     #else
     #ifdef Loop_200HZ
       if (frameCounter %  20 == 0) {  //   10 Hz tasks
@@ -1063,50 +1071,48 @@ void loop () {
       #ifdef Loop_400HZ
         if(frameCounter % 400 == 0) {
       #else      
-      #ifdef Loop_200HZ
-        if(frameCounter % 200 == 0) {
-      #else
-        if(frameCounter % 100 == 0) {
-      #endif	    
+        #ifdef Loop_200HZ
+          if(frameCounter % 200 == 0) {
+        #else
+          if(frameCounter % 100 == 0) {
+        #endif	    
       #endif
-        #ifdef HasGPS
-  /*        if (gps.holdPosition.valid) {
-            if (++timerCounter > 20) {
-              statusLED.setRunState(PAUSED);
-              statusLED.toggle();
-              timerCounter = 0;
-              if (wayPointIndex < 3) {
-                 wayPointIndex++;
-              }
-            } 
-          } else { */
-            if (gps.fix() == 3) {
-              byte sats = gps.getSats();
-              #if defined(UseLED_Library) && (defined(AeroQuadMega_Wii) | defined(AeroQuadMega_v2))
-                statusLED.setCountDown(sats, REPEATCTDN);
-              #else
-                digitalWrite(LED3PIN, HIGH);
-              #endif
-            } else {
-              #if defined(UseLED_Library) && (defined(AeroQuadMega_Wii) | defined(AeroQuadMega_v2))
-                statusLED.setOff();
-              #else
-                digitalWrite(LED3PIN, LOW);
-              #endif
+      #ifdef HasGPS
+/*        if (gps.holdPosition.valid) {
+          if (++timerCounter > 20) {
+            statusLED.setRunState(PAUSED);
+            statusLED.toggle();
+            timerCounter = 0;
+            if (wayPointIndex < 3) {
+               wayPointIndex++;
             }
-  //        }
-        #endif  
+          } 
+        } else { */
+          if (gps.fix() == 3) {
+            byte sats = gps.getSats();
+            #if defined(UseLED_Library) && (defined(AeroQuadMega_Wii) | defined(AeroQuadMega_v2))
+              statusLED.setCountDown(sats, REPEATCTDN);
+            #else
+              digitalWrite(LED3PIN, HIGH);
+            #endif
+          } else {
+            #if defined(UseLED_Library) && (defined(AeroQuadMega_Wii) | defined(AeroQuadMega_v2))
+              statusLED.setOff();
+            #else
+              digitalWrite(LED3PIN, LOW);
+            #endif
+          }
+//        }
         #ifdef DEBUG_GPS
           static byte i = 0;
     
           if (i++ >= 4) {
             i = 0;
-          #ifdef HasGPS
             gps.gpsdump();
-          #endif
           }      
         #endif
       }
+      #endif
     #endif
    
     previousTime = currentTime;
