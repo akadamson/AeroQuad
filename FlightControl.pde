@@ -59,7 +59,7 @@ void calculateFlightError(void)
           yPositionCmd = updatePID(0, flightAngle.getPositionOffset(ROLL), &PID[YPOSITION]);
           xPositionCmd = constrain(xPositionCmd, -3.0, 3.0);
           yPositionCmd = constrain(yPositionCmd, -3.0, 3.0);
-        priorState = POSITION;
+          priorState = POSITION;
         }
       case VELOCITY:
         if (priorState == POSITION) {

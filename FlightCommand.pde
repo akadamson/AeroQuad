@@ -75,6 +75,13 @@ void readPilotCommands() {
     if (receiver.getRaw(YAW) > MINCHECK)
       safetyCheck = ON; 
   }
+  
+  // Get center value of roll/pitch/yaw channels when enough throttle to lift off
+  if (receiver.getRaw(THROTTLE) < 1300) {
+    receiver.setTransmitterTrim(ROLL, receiver.getData(ROLL));
+    receiver.setTransmitterTrim(PITCH, receiver.getData(PITCH));
+    receiver.setTransmitterTrim(YAW, receiver.getData(YAW));
+  }
 
   #ifdef RateModeOnly
     flightMode = RATE;
@@ -111,27 +118,26 @@ void readPilotCommands() {
         // AKA need to put some error checking around this.. in the case where
         // you don't have a good gps FIX, it shouldn't capture or set the valid flag
         // then you need some way to denote this in an LED report or some such
-        gps.capturePosition(&gps.holdPosition);
+        if(gps.holdPosition.valid == false)
+          gps.capturePosition(&gps.holdPosition);
 //        gps.holdPosition = wayPoints[wayPointIndex];
         flightMode = POSITION;
       #else
         flightMode = ATTITUDE;
       #endif
-    }
-    // else it's RATE
-    else {
-        if (flightMode != RATE)
-          #if defined(UseLED_Library) && (defined(AeroQuadMega_Wii) || defined(AeroQuadMega_v2) || defined(AeroQuad_v18))
-            modeLED.setOff();
-	        #else
-	          #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2) || defined(AeroQuadMega_Wii)
-              digitalWrite(LED2PIN, LOW);
-	          #endif
-          #endif
-          flightMode = RATE;
-          #ifdef HasGPS
-            gps.holdPosition.valid = false;
-          #endif
+    } else {     // else it's RATE
+      if (flightMode != RATE)
+        #if defined(UseLED_Library) && (defined(AeroQuadMega_Wii) || defined(AeroQuadMega_v2) || defined(AeroQuad_v18))
+          modeLED.setOff();
+	      #else
+	        #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2) || defined(AeroQuadMega_Wii)
+            digitalWrite(LED2PIN, LOW);
+	        #endif
+        #endif
+        flightMode = RATE;
+        #ifdef HasGPS
+          gps.holdPosition.valid = false;
+        #endif
     }
   #endif
   

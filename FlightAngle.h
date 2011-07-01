@@ -196,11 +196,11 @@ void driftCorrection(float ax, float ay, float az, float oneG, float magX, float
 //    accelWeight = constrain(1 - 10*abs(1 - accelMagnitude), 0, 1);
                          
   // Weight for accelerometer info (<0.75G = 0.0, 1G = 1.0 , >1.25G = 0.0)
-  // AKAaccelWeight = constrain(1 - 4 * abs(1 - accelMagnitude), 0, 1);
+  accelWeight = constrain(1 - 4 * abs(1 - accelMagnitude), 0, 1);
   //accelWeight = 1;
   
   // Weight for accelerometer info (<0.5G = 0.0, 1G = 1.0 , >1.5G = 0.0)
-  accelWeight = constrain(1 - 2 * abs(1 - accelMagnitude), 0, 1);
+  //accelWeight = constrain(1 - 2 * abs(1 - accelMagnitude), 0, 1);
   
   vectorCrossProduct(&errorRollPitch[0], &accelVector[0], &dcmMatrix[6]);
   
@@ -281,8 +281,6 @@ void earthAxisAccels(float ax, float ay, float az, float oneG)
     float xDist, yDist;
     
     matrixTranspose3x3(transMatrix, dcmMatrix);
-    // this next line probabably needs to be moved to the gps.run routine and executed as some internval in the executive
-    gps.calculateXYDistance(gps.currentPosition, gps.holdPosition);
     xDist = transMatrix[0] * gps.getAxisDistance(PITCH) + transMatrix[1] * gps.getAxisDistance(ROLL) + transMatrix[2] * 0;
     yDist = transMatrix[3] * gps.getAxisDistance(PITCH) + transMatrix[4] * gps.getAxisDistance(ROLL) + transMatrix[5] * 0;
     positionDistance[XAXIS] = xDist;

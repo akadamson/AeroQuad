@@ -185,6 +185,9 @@ public:
 
     for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
       tAxis[axis] = ((twiMaster.read(0) << 8) | (twiMaster.read((axis * 2 + 1) == 5)));
+      //measuredMagX =  ((twiMaster.read(0) << 8) | (twiMaster.read(0))) * magCalibration[XAXIS];
+      //measuredMagY = -(((twiMaster.read(0) << 8) | (twiMaster.read(0))) * magCalibration[YAXIS]);
+      //measuredMagZ = -(((twiMaster.read(0) << 8) | (twiMaster.read(1))) * magCalibration[ZAXIS]);
 //      Serial.println(axis,DEC);
     }  
 

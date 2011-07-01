@@ -66,9 +66,16 @@ class GPS_AeroQuad : public TinyGPS {
     
     // main GPS process loop, may swtich to case statement and state machine
     void run(void) {
+//      Serial.print(currentPosition.lat); Serial.print(","); Serial.print(currentPosition.lon); Serial.print(",");
+//      Serial.print(holdPosition.lat); Serial.print(","); Serial.print(holdPosition.lon); Serial.println();
+      
       this->getNewInput();
       if (this->fix() > 2)
         this->capturePosition(&this->currentPosition);
+      // this next line probabably needs to be moved to the gps.run routine and executed as some internval in the executive
+      if (this->currentPosition.valid && this->holdPosition.valid)
+        calculateXYDistance();
+
     }
     
     // return the X or Y position distance for a given Axis
@@ -104,7 +111,7 @@ class GPS_AeroQuad : public TinyGPS {
 
     // return the distance offset between 2 lat/lon gps positions.  
     // current/hold for example
-    void calculateXYDistance(GPSPosition currentPosition, GPSPosition holdPosition) {
+    void calculateXYDistance(void) {
 //      currentPosition.lat = 34084352;
 //      currentPosition.lon = -83947184;
 //      holdPosition.lat = 34084352;
