@@ -62,19 +62,21 @@
 #define BMP_085 // Enable the BMP085 Baro
 //#define MPX_Baro // Enalbe the MPX series Baros with Honks board
 #define BattMonitor //define your personal specs in BatteryMonitor.h! Full documentation with schematic there
-#define HasGPS // define for GPS
+//#define HasGPS // define for GPS
+// *******************************************************************************************************************************
 // MUST DEFINE with GPS - unique to your location W = negative value, E = positive value
-#define MAG_VAR (-(4 + (58.0/60.0)))
+//#define MAG_VAR (-(4 + (58.0/60.0)))
 //#define GPSNMEA // Use an GPS which supports the NMEA string protocol
-#define GPSBINARY // use the DIY MediaTek 3329 binary protocol
+//#define GPSBINARY // use the DIY MediaTek 3329 binary protocol
+// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 //#define RateModeOnly // Use this if you only have a gyro sensor, this will disable any attitude modes.
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 // You must define *only* one of the following 2 flightAngle calculations
 // if you only want DCM, then don't define either of the below
 // flightAngle recommendations: use FlightAngleARG if you do not have a magnetometer, use DCM if you have a magnetometer installed
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
-#define FlightAngleDCM // Use this if you have a magnetometer installed
-//#define FlightAngleARG // Use this if you do not have a magnetometer installed
+//#define FlightAngleDCM // Use this if you have a magnetometer installed
+#define FlightAngleARG // Use this if you do not have a magnetometer installed
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++//
 // Misc defines
 #define ConfiguratorTelem // Enables telemetry interface on Serial for Configurator
@@ -107,7 +109,11 @@
  ****************************************************************************/
 // Debugging defines
 //#define DEBUG_LOOP
-#define DEBUG_GPS
+//#define DEBUG_GPS
+
+#ifdef DEBUG_GPS
+#define HasGPS
+#endif
 
 #if defined(DEBUG_GPS) || defined(HasGPS)
 #define Loop_1HZ
@@ -147,6 +153,7 @@
 #endif
 
 #include <EEPROM.h>
+//#include <Wire.h>
 #include <TwiMaster.h>
 #ifdef HasGPS
   #include <TinyGPS.h>
@@ -158,6 +165,7 @@
 TwiMaster twiMaster;
 
 #include "AeroQuad.h"
+//#include "I2C.h"
 #include "PID.h"
 #include "AQMath.h"
 #include "Receiver.h"
@@ -598,6 +606,7 @@ void setup() {
   #endif
   
   #if defined(AeroQuad_v18) || defined(AeroQuadMega_v2) || defined(AeroQuad_Mini) || defined(AeroQuad_Wii) || defined(AeroQuadMega_Wii) || defined(AeroQuadMega_CHR6DM) || defined(APM_OP_CHR6DM) || defined(ArduCopter)
+//    Wire.begin();
     twiMaster.init(false);
     // Set I2C bus time to 100khz
     TWBR = (F_CPU/100000 - 16)/2;

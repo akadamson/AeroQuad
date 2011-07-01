@@ -338,13 +338,13 @@ public:
     dcmMatrix[7] =  0;
     dcmMatrix[8] =  1;
 
-/*    // Original from John
+    // Original from John
     kpRollPitch = 1.6;
     kiRollPitch = 0.005;
     
     kpYaw = -1.6;
     kiYaw = -0.005;
-*/
+/*
     // released in 2.2
     kpRollPitch = 1.0;
     kiRollPitch = 0.002;
@@ -352,7 +352,7 @@ public:
     kpYaw = -1.0;
     kiYaw = -0.002;
 
-/*   // released in 2.4
+   // released in 2.4
     kpRollPitch = 0.1;        // alternate 0.05;
     kiRollPitch = 0.0002;     // alternate 0.0001;
     

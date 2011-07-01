@@ -24,7 +24,7 @@ public:
   float smoothFactor;
   int gyroChannel[3];
   float gyroData[3];
-#if defined(Loop_200HZ) || defined(Loop_400HZ)
+  #if defined(Loop_200HZ) || defined(Loop_400HZ)
     byte index;
     #ifdef Loop_200HZ
       int gyroRAW[3][2];
@@ -201,27 +201,35 @@ public:
     twiMaster.start(GYRO_ADDRESS | I2C_READ);
 
     #ifdef AeroQuad_Mini    
-      if (twiMaster.read(1) != GYRO_ADDRESS/2 + 1)
+      if (twiMaster.read(1) != GYRO_ADDRESS / 2 + 1)
     #else    
-      if (twiMaster.read(1) != GYRO_ADDRESS/2)
+      if (twiMaster.read(1) != GYRO_ADDRESS / 2)
     #endif    
         SERIAL_PRINTLN("Gyro not found!");
     else {
       twiMaster.start(GYRO_ADDRESS | I2C_WRITE);
       twiMaster.write(0x3E);
       twiMaster.write(0x80);  // send a reset to the device
+      
+      delay(5);
   
       twiMaster.start(GYRO_ADDRESS | I2C_WRITE);
       twiMaster.write(0x16);
-      twiMaster.write(0x1D);  // 10Hz low pass filter 1k internal sample
-      //twiMaster.write(0x18);  // 256hz filter 8k internal sample
+      #if defined(Loop_200HZ) || defined(Loop_400HZ)
+        twiMaster.write(0x18);  // 256hz filter 8k internal sample
+      #else
+        twiMaster.write(0x1D);  // 10Hz low pass filter 1k internal sample
+      #endif
   
+      delay(5);
+      
       twiMaster.start(GYRO_ADDRESS | I2C_WRITE);
       twiMaster.write(0x3E);
       twiMaster.write(0x01);  // use PLL X axis gyro as oscilator
+      
+      delay(10);
     }
     twiMaster.stop();
-    delay(10);
   }
 /******************************************************/
 
@@ -255,24 +263,25 @@ public:
 /******************************************************/
 
   void measure(void) {
-    for (byte axis = ROLL; axis < LASTAXIS; axis++) {
-      #ifdef Loop_400HZ
-        long tempLong = 0;
-        for (byte i = 0; i <= LASTAXIS; i++) {
-          tempLong += gyroRAW[axis][i];
-        }
-        gyroADC[axis] = (int)((tempLong + 2L) / 4L);
-      #else
-        #ifdef Loop_200HZ
-          gyroADC[axis] = ((int)((long)((long)gyroRAW[axis][0] + (long)gyroRAW[axis][1] - 1L) / 2L)) + 1; // average the 2 samples with integer rounding
+    #if defined(Loop_400HZ) || defined(Loop_200HZ)
+      for (byte axis = ROLL; axis < LASTAXIS; axis++) {
+        #ifdef Loop_400HZ
+          long tempLong = 0;
+          for (byte i = 0; i <= LASTAXIS; i++) {
+            tempLong += gyroRAW[axis][i];
+          }
+          gyroADC[axis] = (int)((tempLong + 2L) / 4L);
         #else
-          sample();
+          gyroADC[axis] = ((int)((long)((long)gyroRAW[axis][0] + (long)gyroRAW[axis][1] - 1L) / 2L)) + 1; // average the 2 samples with integer rounding
         #endif
-      #endif
-      
-      gyroData[axis] = filterSmooth((float)gyroADC[axis] * gyroScaleFactor, gyroData[axis], smoothFactor);
-    }
-      
+        gyroData[axis] = filterSmooth((float)gyroADC[axis] * gyroScaleFactor, gyroData[axis], smoothFactor);
+      }
+    #else
+      sample();
+      for (byte axis = ROLL; axis < LASTAXIS; axis++)
+        gyroData[axis] = filterSmooth((float)gyroADC[axis] * gyroScaleFactor, gyroData[axis], smoothFactor);
+    #endif
+          
     //  Calculate gyro based heading
     long currentGyroTime = micros();
     if (gyroData[YAW] > radians(1.0) || gyroData[YAW] < radians(-1.0))

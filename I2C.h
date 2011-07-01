@@ -68,6 +68,13 @@ void updateRegisterI2C(int deviceAddress, byte dataAddress, byte dataValue) {
   Wire.send(dataAddress);
   Wire.send(dataValue);
   Wire.endTransmission();
-}  
+}
 
+void updateWordRegisterI2C(int deviceAddress, byte dataAddress, byte dataMSB, byte dataLSB) {
+  Wire.beginTransmission(deviceAddress);
+  Wire.send(dataAddress);
+  Wire.send(dataMSB);
+  Wire.send(dataLSB);
+  Wire.endTransmission();
+}
 

@@ -89,9 +89,9 @@ void initializeEEPROM(void) {
   PID[LEVELGYROPITCH].P = 100.0;
   PID[LEVELGYROPITCH].I = 0.0;
   PID[LEVELGYROPITCH].D = -300.0;
-  PID[ALTITUDE].P = 25.0;
-  PID[ALTITUDE].I = 0.1;
-  PID[ALTITUDE].D = 0.0;
+  PID[ALTITUDE].P = 10.0;
+  PID[ALTITUDE].I = 0.2;
+  PID[ALTITUDE].D = -400.0;
   PID[ALTITUDE].windupGuard = 25.0; //this prevents the 0.1 I term to rise too far
   PID[ZDAMPENING].P = 0.0;
   PID[ZDAMPENING].I = 0.0;

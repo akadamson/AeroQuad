@@ -162,11 +162,15 @@ public:
       twiMaster.write(0x0D);
       twiMaster.write(0x10);  // Enable writting to control registers
       
+      delay(5);
+      
       twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
       twiMaster.write(0x20);  // Register bw_tcs (bits 4-7)
       
       twiMaster.start(ACCEL_ADDRESS | I2C_READ);
       data = twiMaster.read(1);
+      
+      delay(5);
       
       twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
       twiMaster.write(0x20);
@@ -176,7 +180,7 @@ public:
         twiMaster.write(data & 0x0F);  // Set low pass filter to 10 Hz (value = 0000xxxx)
       #endif
         
-      
+      delay (5);
       
       twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
       twiMaster.write(0x35);
@@ -186,9 +190,13 @@ public:
       data &= 0xF1;
       data |= 0x08;
       
+      delay(5);
+      
       twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
       twiMaster.write(0x35);
       twiMaster.write(data);  // Set range select bits for +/- 4g
+      
+      delay(5);
     }
     twiMaster.stop();
   }
@@ -205,13 +213,14 @@ public:
     for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
       #if defined(Loop_200HZ) || defined(Loop_400HZ)
         #ifdef Loop_200HZ
-          accelRAW[axis][index ^ 1] = ((twiMaster.read(0)|(twiMaster.read((axis * 2 + 1) == 5) << 8)));
+          accelRAW[axis][index ^ 1] = ((twiMaster.read(0) | (twiMaster.read((axis * 2 + 1) == 5) << 8)) >> 2);
         #else
-          accelRAW[axis][index % 4] = ((twiMaster.read(0)|(twiMaster.read((axis * 2 + 1) == 5) << 8)));
+          accelRAW[axis][index % 4] = ((twiMaster.read(0) | (twiMaster.read((axis * 2 + 1) == 5) << 8)) >> 2);
         #endif
       #else
-        accelADC[axis] = ((twiMaster.read(0)|(twiMaster.read((axis * 2 + 1) == 5) << 8)));
+        accelADC[axis] = ((twiMaster.read(0) | (twiMaster.read((axis * 2 + 1) == 5) << 8)) >> 2);
       #endif
+//      Serial.println(accelADC[axis]);
     }
     #ifdef Loop_200HZ
       index ^= 1;
@@ -222,23 +231,24 @@ public:
 /******************************************************/
 
   void measure(void) {
-    for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
-      #ifdef Loop_400HZ
-        long tempLong = 0;
-        for (byte i = 0; i <= LASTAXIS; i++) {
-          tempLong += accelRAW[axis][i];
-        }
-        accelADC[axis] = (int)((tempLong + 2L) / 4L);
-      #else
-        #ifdef Loop_200HZ
-          accelADC[axis] = ((int)((long)((long)accelRAW[axis][0] + (long)accelRAW[axis][1] - 1L) / 2L)) + 1; // average the 2 samples with integer rounding
+    #if defined(Loop_400HZ) || defined(Loop_200HZ)
+      for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
+        #ifdef Loop_400HZ
+          long tempLong = 0;
+          for (byte i = 0; i <= LASTAXIS; i++) {
+            tempLong += accelRAW[axis][i];
+          }
+          accelADC[axis] = (int)((tempLong + 2L) / 4L);
         #else
-          sample();
+          accelADC[axis] = ((int)((long)((long)accelRAW[axis][0] + (long)accelRAW[axis][1] - 1L) / 2L)) + 1; // average the 2 samples with integer rounding
         #endif
-      #endif
-
-      accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
-    }
+        accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
+      }
+    #else
+      sample();
+      for (byte axis = XAXIS; axis < LASTAXIS; axis++)
+        accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
+    #endif
   }
 };
 #endif
@@ -269,17 +279,23 @@ public:
       twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);  // set device to *measure*
       twiMaster.write(0x2D);
       twiMaster.write(0x08);
+      
+      delay(5);
   
       twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);  // set full resolution and +/- 4G
       twiMaster.write(0x31);
       twiMaster.write(0x09);
+      
+      delay(5);
   
       twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);  // 200hz sampling
       twiMaster.write(0x2C);
       twiMaster.write(0x0B);
+      
+      delay(10); 
+      
     }
     twiMaster.stop();
-    delay(10); 
   }
   
 /******************************************************/
@@ -307,26 +323,28 @@ public:
     #endif
     twiMaster.stop();
   }
+
 /******************************************************/
 
   void measure(void) {
-    for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
-      #ifdef Loop_400HZ
-        long tempLong = 0;
-        for (byte i = 0; i <= LASTAXIS; i++) {
-          tempLong += accelRAW[axis][i];
-        }
-        accelADC[axis] = (int)((tempLong + 2L) / 4L);
-      #else
-        #ifdef Loop_200HZ
-          accelADC[axis] = ((int)((long)((long)accelRAW[axis][0] + (long)accelRAW[axis][1] - 1L) / 2L)) + 1; // average the 2 samples with integer rounding
+    #if defined(Loop_400HZ) || defined(Loop_200HZ)
+      for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
+        #ifdef Loop_400HZ
+          long tempLong = 0;
+          for (byte i = 0; i <= LASTAXIS; i++) {
+            tempLong += accelRAW[axis][i];
+          }
+          accelADC[axis] = (int)((tempLong + 2L) / 4L);
         #else
-          sample();
+          accelADC[axis] = ((int)((long)((long)accelRAW[axis][0] + (long)accelRAW[axis][1] - 1L) / 2L)) + 1; // average the 2 samples with integer rounding
         #endif
-      #endif
-
-      accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
-    }
+        accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
+      }
+    #else
+      sample();
+      for (byte axis = XAXIS; axis < LASTAXIS; axis++)
+        accelData[axis] = filterSmooth(accelADC[axis], accelData[axis], smoothFactor);
+    #endif
   }
 };
 #endif

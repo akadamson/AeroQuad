@@ -32,7 +32,7 @@ public:
   float groundAltitude;
   float smoothFactor;
   
-  Altitude (void) { 
+  Altitude() { 
     altitude = 0;
     smoothFactor = 0.02;
   }
@@ -110,8 +110,14 @@ public:
     twiMaster.write(0x01); // config register
     twiMaster.write(0xC2); // msb
     twiMaster.write(0xE3); // lsb
+    
+    delay(5);
+    
     twiMaster.start(ALTITUDE_ADDRESS | I2C_WRITE);
     twiMaster.write(0x00); // conversion register
+
+    delay(5);
+    
     twiMaster.stop();
    
     measureGround();

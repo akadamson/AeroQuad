@@ -103,6 +103,7 @@ public:
   void initialize(void) {
     byte numAttempts = 0;
     bool success = false;
+
     delay(10);                             // Power up delay **
    
     magCalibration[XAXIS] = 1.0;
@@ -116,20 +117,23 @@ public:
       twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);                                       // HJI
       twiMaster.write(0x00);                                                             // HJI
       twiMaster.write(0x11);  // Set positive bias configuration for sensor calibraiton  // HJI
+
       delay(50);
-   
+/*   
       twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);  // HJI
       twiMaster.write(0x01);                        // HJI
       twiMaster.write(0x20);  // Set +/- 1G gain    // HJI
       delay(10);
-
+*/
       twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);          // HJI
       twiMaster.write(0x02);                                // HJI
       twiMaster.write(0x01);  // Perform single conversion  // HJI
       twiMaster.stop();
+
       delay(10);
    
       measure(0.0, 0.0);                    // Read calibration data
+
       delay(10);
    
       if (   fabs(measuredMagX) > 500.0 && fabs(measuredMagX) < 1000.0 \
@@ -141,17 +145,19 @@ public:
     
         success = true;
       }
-   
+/*   
       twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);                           // HJI
       twiMaster.write(0x00);                                                 // HJI
       twiMaster.write(0x10);  // Set 10 Hz update rate and normal operation  // HJI
       delay(50);
-
+*/
       twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);       // HJI
       twiMaster.write(0x02);                             // HJI
       twiMaster.write(0x00);  // Continuous update mode  // HJI
-      twiMaster.stop();                                  // HJI
+      
       delay(100);             // Mode change delay (1/Update Rate) **
+      
+      twiMaster.stop();                                  // HJI
     }
 
     measure(0.0, 0.0);  // Assume 1st measurement at 0 degrees roll and 0 degrees pitch
@@ -165,16 +171,30 @@ public:
     float magX;
     float magY;
     float tmp;
+    int tAxis[3];
+    
+//    Serial.println("start measure");
     
     twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);                                             // HJI
     twiMaster.write(0x03);                                                                   // HJI
     twiMaster.start(COMPASS_ADDRESS | I2C_READ);                                              // HJI
 
-    measuredMagX =  ((twiMaster.read(0) << 8) | twiMaster.read(0)) * magCalibration[XAXIS];  // HJI
-    measuredMagY = -((twiMaster.read(0) << 8) | twiMaster.read(0)) * magCalibration[YAXIS];  // HJI
-    measuredMagZ = -((twiMaster.read(0) << 8) | twiMaster.read(1)) * magCalibration[ZAXIS];  // HJI
+//    Serial.print(currentTime);comma();
+//    Serial.println("middle measure");
+//    Serial.print(magCalibration[XAXIS]); comma();    Serial.print(magCalibration[YAXIS]); comma();    Serial.println(magCalibration[ZAXIS]);
+
+    for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
+      tAxis[axis] = ((twiMaster.read(0) << 8) | (twiMaster.read((axis * 2 + 1) == 5)));
+//      Serial.println(axis,DEC);
+    }  
 
     twiMaster.stop();                                                                        // HJI
+      
+    measuredMagX =  tAxis[XAXIS] * magCalibration[XAXIS];
+    measuredMagY = -(tAxis[YAXIS] * magCalibration[YAXIS]);
+    measuredMagZ = -(tAxis[ZAXIS] * magCalibration[ZAXIS]);
+
+//    Serial.println("stop measure");
 
     cosRoll =  cos(roll);
     sinRoll =  sin(roll);
@@ -192,7 +212,7 @@ public:
     
     hdgX = magX / tmp;
     hdgY = -magY / tmp;
-
+    
   }
 };
 
