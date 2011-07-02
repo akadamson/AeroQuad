@@ -1,5 +1,5 @@
 /*
-  AeroQuad v2.4.1 - June 2011
+  AeroQuad v2.4.2 - June 2011
   www.AeroQuad.com
   Copyright (c) 2011 Ted Carancho.  All rights reserved.
   An Open Source Arduino based multicopter.
@@ -174,7 +174,7 @@ public:
       
       twiMaster.start(ACCEL_ADDRESS | I2C_WRITE);
       twiMaster.write(0x20);
-      #if defined(Loop_200HZ) || defined(Loop_400HZ)
+      #if defined(Loop_400HZ)
         twiMaster.write(data & 0x7F);  // Set low pass filter to 1200 Hz (value = 0111xxxx)
       #else
         twiMaster.write(data & 0x0F);  // Set low pass filter to 10 Hz (value = 0000xxxx)
@@ -220,7 +220,6 @@ public:
       #else
         accelADC[axis] = ((twiMaster.read(0) | (twiMaster.read((axis * 2 + 1) == 5) << 8)) >> 2);
       #endif
-//      Serial.println(accelADC[axis]);
     }
     #ifdef Loop_200HZ
       index ^= 1;

@@ -1,5 +1,5 @@
 /*
-  AeroQuad v2.4.1 - June 2011
+  AeroQuad v2.4.2 - June 2011
   www.AeroQuad.com
   Copyright (c) 2011 Ted Carancho.  All rights reserved.
   An Open Source Arduino based multicopter.
@@ -90,6 +90,7 @@ public:
 // ************************* MPX_SCC Subclass ****************************
 // ***********************************************************************
 
+#ifdef MPX_Baro
 class Altitude_MPX_SCC : public Altitude {
 private:
   uint16_t rawADC;
@@ -151,10 +152,12 @@ public:
     altitude = filterSmooth(rawAltitude, altitude, smoothFactor);
   }
 };
+#endif
 
 // ***********************************************************************
 // ************************* BMP085 Subclass *****************************
 // ***********************************************************************
+#ifdef BMP_085
 class Altitude_AeroQuad_v2 : public Altitude {
 // This sets up the BMP085 from Sparkfun
 // Code from http://wiring.org.co/learning/libraries/bmp085.html
@@ -187,7 +190,7 @@ private:
     lsb = twiMaster.read(0);
     xlsb = twiMaster.read(1);
     twiMaster.stop();
-    return (((long)msb<<16) | ((long)lsb<<8) | ((long)xlsb)) >>(8-overSamplingSetting);
+    return (((long)msb<<16) | ((long)lsb<<8) | ((long)xlsb)) >> (8 - overSamplingSetting);
   }
 
   void requestRawTemperature(void) {
@@ -205,7 +208,7 @@ private:
     msb = twiMaster.read(0);
     lsb = twiMaster.read(1);
     twiMaster.stop();
-    return(((int)msb<<8) | ((int)lsb));
+    return(((int)msb << 8) | ((int)lsb));
   }
 
 public: 
@@ -316,5 +319,5 @@ public:
     altitude = filterSmooth(rawAltitude, altitude, smoothFactor);
   }
 };
-
+#endif
 

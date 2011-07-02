@@ -1,5 +1,5 @@
 /*
-  AeroQuad v2.4.1 - June 2011
+  AeroQuad v2.4.2 - June 2011
   www.AeroQuad.com
   Copyright (c) 2011 Ted Carancho.  All rights reserved.
   An Open Source Arduino based multicopter.
@@ -119,12 +119,12 @@ public:
       twiMaster.write(0x11);  // Set positive bias configuration for sensor calibraiton  // HJI
 
       delay(50);
-/*   
+   
       twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);  // HJI
       twiMaster.write(0x01);                        // HJI
       twiMaster.write(0x20);  // Set +/- 1G gain    // HJI
       delay(10);
-*/
+
       twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);          // HJI
       twiMaster.write(0x02);                                // HJI
       twiMaster.write(0x01);  // Perform single conversion  // HJI
@@ -145,12 +145,12 @@ public:
     
         success = true;
       }
-/*   
+   
       twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);                           // HJI
       twiMaster.write(0x00);                                                 // HJI
       twiMaster.write(0x10);  // Set 10 Hz update rate and normal operation  // HJI
       delay(50);
-*/
+
       twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);       // HJI
       twiMaster.write(0x02);                             // HJI
       twiMaster.write(0x00);  // Continuous update mode  // HJI
@@ -173,22 +173,15 @@ public:
     float tmp;
     int tAxis[3];
     
-//    Serial.println("start measure");
-    
     twiMaster.start(COMPASS_ADDRESS | I2C_WRITE);                                             // HJI
     twiMaster.write(0x03);                                                                   // HJI
     twiMaster.start(COMPASS_ADDRESS | I2C_READ);                                              // HJI
-
-//    Serial.print(currentTime);comma();
-//    Serial.println("middle measure");
-//    Serial.print(magCalibration[XAXIS]); comma();    Serial.print(magCalibration[YAXIS]); comma();    Serial.println(magCalibration[ZAXIS]);
 
     for (byte axis = XAXIS; axis < LASTAXIS; axis++) {
       tAxis[axis] = ((twiMaster.read(0) << 8) | (twiMaster.read((axis * 2 + 1) == 5)));
       //measuredMagX =  ((twiMaster.read(0) << 8) | (twiMaster.read(0))) * magCalibration[XAXIS];
       //measuredMagY = -(((twiMaster.read(0) << 8) | (twiMaster.read(0))) * magCalibration[YAXIS]);
       //measuredMagZ = -(((twiMaster.read(0) << 8) | (twiMaster.read(1))) * magCalibration[ZAXIS]);
-//      Serial.println(axis,DEC);
     }  
 
     twiMaster.stop();                                                                        // HJI
@@ -196,8 +189,6 @@ public:
     measuredMagX =  tAxis[XAXIS] * magCalibration[XAXIS];
     measuredMagY = -(tAxis[YAXIS] * magCalibration[YAXIS]);
     measuredMagZ = -(tAxis[ZAXIS] * magCalibration[ZAXIS]);
-
-//    Serial.println("stop measure");
 
     cosRoll =  cos(roll);
     sinRoll =  sin(roll);

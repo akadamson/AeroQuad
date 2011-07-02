@@ -1,5 +1,5 @@
 /*
-  AeroQuad v2.4.1 - June 2011
+  AeroQuad v2.4.2 - June 2011
   www.AeroQuad.com
   Copyright (c) 2011 Ted Carancho.  All rights reserved.
   An Open Source Arduino based multicopter.
@@ -215,7 +215,7 @@ public:
   
       twiMaster.start(GYRO_ADDRESS | I2C_WRITE);
       twiMaster.write(0x16);
-      #if defined(Loop_200HZ) || defined(Loop_400HZ)
+      #if defined(Loop_400HZ)
         twiMaster.write(0x18);  // 256hz filter 8k internal sample
       #else
         twiMaster.write(0x1D);  // 10Hz low pass filter 1k internal sample

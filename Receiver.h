@@ -1,5 +1,5 @@
 /*
-  AeroQuad v2.4.1 - June 2011
+  AeroQuad v2.4.2 - June 2011
   www.AeroQuad.com
   Copyright (c) 2011 Ted Carancho.  All rights reserved.
   An Open Source Arduino based multicopter.
@@ -22,11 +22,15 @@ class  Receiver {
 public:
   int receiverData[LASTCHANNEL];
   int transmitterCommand[LASTCHANNEL];
-  
+ 
+#ifdef SMOOTH_RX
   // RX smoothing
   byte rcAveIndex;
   int rcAveData[LASTCHANNEL][4];
   int rcSlop[LASTCHANNEL];
+#else
+  int transmitterCommandSmooth[LASTCHANNEL];
+#endif
   
   int transmitterZero[3];
   int transmitterTrim[3];
@@ -38,7 +42,9 @@ public:
   float bTransmitter[LASTCHANNEL];
 
   Receiver(void) {
+  #ifdef SMOOTH_RX
     rcAveIndex = 0;
+  #endif
     transmitterCommand[ROLL] = 1500;
     transmitterCommand[PITCH] = 1500;
     transmitterCommand[YAW] = 1500;
@@ -46,6 +52,10 @@ public:
     transmitterCommand[MODE] = 1000;
     transmitterCommand[AUX] = 1000;
 
+  #if !defined(SMOOTH_RX)
+    for (byte channel = ROLL; channel < LASTCHANNEL; channel++)
+      transmitterCommandSmooth[channel] = 1.0;
+  #endif      
     for (byte channel = ROLL; channel < THROTTLE; channel++)
       transmitterZero[channel] = 1500;
   }
@@ -81,46 +91,62 @@ public:
     mTransmitter[5] = readFloat(RECEIVER_CHANNEL_5_SLOPE_ADR);
     bTransmitter[5] = readFloat(RECEIVER_CHANNEL_5_OFFSET_ADR);
     transmitterSmooth[5] = readFloat(RECEIVER_CHANNEL_5_SMOOTH_FACTOR_ADR);
-
+    
+  #ifdef SMOOTH_RX
     for(byte channel = ROLL; channel < LASTCHANNEL; channel++) {
      // AKA experiement
       // initialize the average array incase of no receiver
       for (byte i = 0; i < 4; i++)
         rcAveData[channel][i] = MIDCOMMAND;
     }
+  #endif
   }
 
   // Calculate PWM pulse width of receiver data
   // If invalid PWM measured, use last known good time
   void read(void) {
-    rcAveIndex++;
+    #ifdef SMOOTH_RX
+      rcAveIndex++;
+    #endif
     for(byte channel = ROLL; channel < LASTCHANNEL; channel++) {
       // Apply transmitter calibration adjustment
-      rcAveData[channel][rcAveIndex % 4] = (mTransmitter[channel] * getReceiverChannel(channel)) + bTransmitter[channel];
+      #ifdef SMOOTH_RX
+        rcAveData[channel][rcAveIndex % 4] = (mTransmitter[channel] * getReceiverChannel(channel)) + bTransmitter[channel];
 
-      receiverData[channel] = 0;
-      for (byte i = 0; i < 4; i++) {
-        receiverData[channel] += rcAveData[channel][i];
-      }
-      receiverData[channel] = (receiverData[channel] + 2) / 4;
+        receiverData[channel] = 0;
+        for (byte i = 0; i < 4; i++) {
+          receiverData[channel] += rcAveData[channel][i];
+        }
+        receiverData[channel] = (receiverData[channel] + 2) / 4;
       
-      // added AKA create deadband version
-      if (receiverData[channel] < rcSlop[channel] - 3)
-        rcSlop[channel] = receiverData[channel] + 2;
-      if (receiverData[channel] > rcSlop[channel] + 3)
-        rcSlop[channel] = receiverData[channel] - 2;
-        
-      // Smooth the flight control transmitter inputs
-      // AKA 2.4 transmitterCommandSmooth[channel] = filterSmooth(receiverData[channel], transmitterCommandSmooth[channel], transmitterSmooth[channel]);
+        // added AKA create deadband version
+        if (receiverData[channel] < rcSlop[channel] - 3)
+          rcSlop[channel] = receiverData[channel] + 2;
+        if (receiverData[channel] > rcSlop[channel] + 3)
+          rcSlop[channel] = receiverData[channel] - 2;
+      #else
+        receiverData[channel] = (mTransmitter[channel] * getReceiverChannel(channel)) + bTransmitter[channel];
+        // Smooth the flight control transmitter inputs
+        transmitterCommandSmooth[channel] = filterSmooth(receiverData[channel], transmitterCommandSmooth[channel], transmitterSmooth[channel]);
+      #endif
+      
     }
 
     // Reduce transmitter commands using xmitFactor and center around 1500
     for (byte channel = ROLL; channel < THROTTLE; channel++)
+    #ifdef SMOOTH_RX
       transmitterCommand[channel] = ((rcSlop[channel] - transmitterZero[channel]) * xmitFactor) + transmitterZero[channel]; // use the hysteresis version
+    #else
+      transmitterCommand[channel] = ((transmitterCommandSmooth[channel] - transmitterZero[channel]) * xmitFactor) + transmitterZero[channel];
+    #endif
 
     // No xmitFactor reduction applied for throttle, mode and AUX
     for (byte channel = THROTTLE; channel < LASTCHANNEL; channel++)
+    #ifdef SMOOTH_RX
       transmitterCommand[channel] = rcSlop[channel]; // use the hysteresis version
+    #else
+      transmitterCommand[channel] = transmitterCommandSmooth[channel];
+    #endif
   }
 
   // returns non-smoothed non-scaled ADC data in PWM full range 1000-2000 values

@@ -1,5 +1,5 @@
 /*
-  AeroQuad v2.4.1 - June 2011
+  AeroQuad v2.4.2 - June 2011
   www.AeroQuad.com
   Copyright (c) 2011 Ted Carancho.  All rights reserved.
   An Open Source Arduino based multicopter.
@@ -197,7 +197,6 @@ void driftCorrection(float ax, float ay, float az, float oneG, float magX, float
                          
   // Weight for accelerometer info (<0.75G = 0.0, 1G = 1.0 , >1.25G = 0.0)
   accelWeight = constrain(1 - 4 * abs(1 - accelMagnitude), 0, 1);
-  //accelWeight = 1;
   
   // Weight for accelerometer info (<0.5G = 0.0, 1G = 1.0 , >1.5G = 0.0)
   //accelWeight = constrain(1 - 2 * abs(1 - accelMagnitude), 0, 1);
@@ -206,8 +205,8 @@ void driftCorrection(float ax, float ay, float az, float oneG, float magX, float
   
   vectorScale(3, &omegaP[0], &errorRollPitch[0], kpRollPitch * accelWeight);
   
-// AKA errorRollPitch[0] = constrain(errorRollPitch[0], -0.000029, 0.000029);
-// AKA errorRollPitch[1] = constrain(errorRollPitch[1], -0.000029, 0.000029);
+//  errorRollPitch[0] = constrain(errorRollPitch[0], -0.000029, 0.000029);
+//  errorRollPitch[1] = constrain(errorRollPitch[1], -0.000029, 0.000029);
   
   vectorScale(3, &scaledOmegaI[0], &errorRollPitch[0], kiRollPitch * accelWeight);
   vectorAdd(3, omegaI, omegaI, scaledOmegaI);
@@ -223,7 +222,7 @@ void driftCorrection(float ax, float ay, float az, float oneG, float magX, float
     
     vectorAdd(3, omegaP, omegaP, scaledOmegaP);
     
-// AKA    errorRollPitch[2] = constrain(errorRollPitch[2], -0.000029, 0.000029);
+//    errorRollPitch[2] = constrain(errorRollPitch[2], -0.000029, 0.000029);
   
     vectorScale(3, &scaledOmegaI[0] ,&errorYaw[0], kiYaw);
     vectorAdd(3, omegaI, omegaI, scaledOmegaI);
@@ -336,12 +335,14 @@ public:
     dcmMatrix[7] =  0;
     dcmMatrix[8] =  1;
 
+    #ifdef Loop_400HZ
     // Original from John
     kpRollPitch = 1.6;
     kiRollPitch = 0.005;
     
     kpYaw = -1.6;
     kiYaw = -0.005;
+    #else
 /*
     // released in 2.2
     kpRollPitch = 1.0;
@@ -349,14 +350,14 @@ public:
 
     kpYaw = -1.0;
     kiYaw = -0.002;
-
+*/
    // released in 2.4
     kpRollPitch = 0.1;        // alternate 0.05;
     kiRollPitch = 0.0002;     // alternate 0.0001;
     
     kpYaw = -1.0;
     kiYaw = -0.002;
-*/    
+    #endif    
   }
   
 ////////////////////////////////////////////////////////////////////////////////
@@ -369,20 +370,25 @@ public:
     matrixUpdate(rollRate, pitchRate, yawRate); 
     normalize();
     driftCorrection(longitudinalAccel, lateralAccel, verticalAccel, oneG, magX, magY);
-    #if !defined(Loop_200HZ) && !defined(Loop_400HZ)
+    #if !defined(Loop_400HZ)
       eulerAngles();
+      #ifdef HasGPS
+       if (flightMode == POSITION)
+          if (gps.holdPosition.valid && gps.currentPosition.valid) 
+            calcXYPosition();
+      #endif    
     #endif
-    earthAxisAccels(longitudinalAccel, lateralAccel, verticalAccel, oneG);
+//    earthAxisAccels(longitudinalAccel, lateralAccel, verticalAccel, oneG);
+  }
+  
+  #if defined(Loop_400HZ)
+  void doEuler(void) {
+    eulerAngles();
     #ifdef HasGPS
      if (flightMode == POSITION)
         if (gps.holdPosition.valid && gps.currentPosition.valid) 
           calcXYPosition();
     #endif    
-  }
-  
-  #if defined(Loop_200HZ) || defined(Loop_400HZ)
-  void doEuler(void) {
-    eulerAngles();
   }
   #endif
 };
@@ -522,14 +528,15 @@ public:
     eyInt = 0.0;
     ezInt = 0.0;
 
+    #ifdef Loop_400HZ
     // Original from John
     Kp = 2.0;
     Ki = 0.005;
-    
-/*    // released in 2.4
+    #else
+    // released in 2.4
     Kp = 0.2; // 2.0;
     Ki = 0.0005; //0.005;
-*/
+    #endif
   }
   
 ////////////////////////////////////////////////////////////////////////////////
@@ -543,11 +550,11 @@ public:
     argUpdate(rollRate,          pitchRate,    yawRate, \
               longitudinalAccel, lateralAccel, verticalAccel,  \
               measuredMagX,      measuredMagY, measuredMagZ);
-    #if !defined(Loop_200HZ) && !defined(Loop_400HZ)
+    #if !defined(Loop_400HZ)
       eulerAngles();
     #endif
   }
-  #if defined(Loop_200HZ) || defined(Loop_400HZ)
+  #if defined(Loop_400HZ)
   void doEuler(void) {
     eulerAngles();
   }

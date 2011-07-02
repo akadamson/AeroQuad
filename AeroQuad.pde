@@ -1,5 +1,5 @@
 /*
-  AeroQuad v2.4.1 - June 2011
+  AeroQuad v2.4.2 - June 2011
   www.AeroQuad.com 
   Copyright (c) 2011 Ted Carancho.  All rights reserved.
   An Open Source Arduino based multicopter.
@@ -89,6 +89,7 @@
 //#define Loop_1HZ // Enable 1Hz timing loop
 #define AKA_MODS // various modifications from AKA
 //#define UseLED_Library  // includes the LED library for those platforms that are built to suppor it
+//#define SMOOTH_RX // enables a 4 sample PWM smoothing algo on all RX channels with hysteresis
 
 // *******************************************************************************************************************************
 // Camera Stabilization
@@ -814,7 +815,7 @@ void loop () {
     // 100hz task loop (second one interleaved with first when 200 or 400hz loop is selected)
     // ================================================================
     #ifdef Loop_400HZ
-      if (frameCounter %   4 == 1) {  //  Second 100 Hz tasks interleaved with the other one
+      if (frameCounter %   4 == 0) {  //  Second 100 Hz tasks interleaved with the other one
     #else
       if (frameCounter %   2 == 0) {  //  Second 100 Hz tasks interleaved with the other one
     #endif
@@ -826,8 +827,9 @@ void loop () {
       G_Dt = (currentTime - hundredHZ1previousTime) / 1000000.0;
       hundredHZ1previousTime = currentTime;
 
-      // test code only
+      #ifdef Loop_400HZ
       flightAngle.doEuler();
+      #endif
     
       processFlightControl();
  
@@ -841,7 +843,7 @@ void loop () {
     // 100hz task loop
     // ================================================================
     #ifdef Loop_400HZ
-        if (frameCounter %   4 == 0) {  //  100 Hz tasks
+        if (frameCounter %   4 == 3) {  //  100 Hz tasks
     #else
       #ifdef Loop_200HZ
         if (frameCounter %   2 == 1) {  //  100 Hz tasks
@@ -861,19 +863,17 @@ void loop () {
       gyro.measure();
       accel.measure();
 
-//      #ifdef DEBUG_LOOP
-//        digitalWrite(11, HIGH);
-//      #endif
-      
-      // AKA - need to move these inside the accel measure method at some point  
-      filteredAccel[XAXIS] = computeFourthOrder(accel.getData(XAXIS), &fourthOrder[AX_FILTER]);
-      filteredAccel[YAXIS] = computeFourthOrder(accel.getData(YAXIS), &fourthOrder[AY_FILTER]);
-      filteredAccel[ZAXIS] = computeFourthOrder(accel.getData(ZAXIS), &fourthOrder[AZ_FILTER]);
+      // AKA - need to move these inside the accel measure method at some point
+      #ifdef FlightAngleARG
+        filteredAccel[XAXIS] = computeFourthOrder(accel.getData(XAXIS), &fourthOrder[AX_FILTER]);
+        filteredAccel[YAXIS] = computeFourthOrder(accel.getData(YAXIS), &fourthOrder[AY_FILTER]);
+        filteredAccel[ZAXIS] = computeFourthOrder(accel.getData(ZAXIS), &fourthOrder[AZ_FILTER]);
+      #else        
+        filteredAccel[XAXIS] = accel.getData(XAXIS);
+        filteredAccel[YAXIS] = accel.getData(YAXIS);
+        filteredAccel[ZAXIS] = accel.getData(ZAXIS);
+      #endif
         
-//      #ifdef DEBUG_LOOP
-//        digitalWrite(11, LOW);
-//      #endif
-
       // ****************** Calculate Absolute Angle *****************
       #if defined HeadingMagHold && defined FlightAngleARG
         // ARG with compass (not used by AHRS)
@@ -955,7 +955,7 @@ void loop () {
     // 50hz task loop
     // ================================================================
     #ifdef Loop_400HZ
-      if (frameCounter %   8 == 2) {  //  50 Hz tasks
+      if (frameCounter %   8 == 1) {  //  50 Hz tasks
     #else
     #ifdef Loop_200HZ
       if (frameCounter %   4 == 0) {  //  50 Hz tasks
@@ -993,7 +993,7 @@ void loop () {
     // 25hz task loop
     // ================================================================
     #ifdef Loop_400HZ
-      if (frameCounter %   16 == 1) {  //  25 Hz tasks offset forward by 1 frame count    
+      if (frameCounter %   16 == 2) {  //  25 Hz tasks offset forward by 1 frame count    
     #else
     #ifdef Loop_200HZ
       if (frameCounter %   8 == 1) {  //  25 Hz tasks offset forward by 1 frame count
@@ -1028,7 +1028,7 @@ void loop () {
     // 10hz task loop
     // ================================================================
     #ifdef Loop_400HZ
-      if (frameCounter %  40 == 3) {  //   10 Hz tasks
+      if (frameCounter %  40 == 2) {  //   10 Hz tasks
     #else
     #ifdef Loop_200HZ
       if (frameCounter %  20 == 0) {  //   10 Hz tasks
@@ -1062,7 +1062,7 @@ void loop () {
       #ifdef BinaryWrite
         if (fastTransfer == ON) {
           // write out fastTelemetry to Configurator or openLog
-// AKA         fastTelemetry();
+          fastTelemetry();
         }
       #endif      
 	
